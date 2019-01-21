@@ -170,7 +170,8 @@ class FTUpdateService {
         result.provider = kbc.provider ? "${kbc.provider.class?.name}:${kbc.provider?.id}" : ""
 
         result.platformName = kbc.nominalPlatform?.name
-        
+        result.scope = kbc.scope
+
         result.curatoryGroups = []
         kbc.curatoryGroups?.each { cg ->
           result.curatoryGroups.add(cg.name)
