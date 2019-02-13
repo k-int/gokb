@@ -463,18 +463,20 @@ class TitleLookupService {
 
         }
 
+        def metadataTitleNormname = KBComponent.generateNormname(metadata.title)
+
         switch ( all_matched.size() ) {
           case 0 :
             log.debug("Multiple matches for a single identifier. No matches for all class ones. Creating new TI!")
 
             if ( newTitleClassName == null ) {
-              the_title = new TitleInstance(name:metadata.title, normname:KBComponent.generateNormname(metadata.title), ids:[])
+              the_title = new TitleInstance(name:metadata.title, normname:metadataTitleNormname, ids:[])
             }
             else {
               def clazz = Class.forName(newTitleClassName)
               the_title = clazz.newInstance()
               the_title.name = metadata.title
-              the_title.normname = KBComponent.generateNormname(metadata.title)
+              the_title.normname = metadataTitleNormname
               the_title.ids = []
             }
 
@@ -517,7 +519,7 @@ class TitleLookupService {
             def matched_with_name = []
 
             all_matched.each { mti ->
-              if ( mti.name.equals(metadata.title) || mti.normname?.equals(KBComponent.generateNormname(metadata.title)) ) {
+              if ( mti.name.equals(metadata.title) || mti.normname?.equals(metadataTitleNormname) ) {
                 matched_with_name.add(mti)
               }
             }
@@ -527,7 +529,7 @@ class TitleLookupService {
               the_title = matched_with_name[0]
             }
             else {
-              log.debug("Could not match a specific title. Skipping..")
+              log.warn("Could not match a specific title for name ${metadata.title}. Skipping..")
             }
             break;
         }
