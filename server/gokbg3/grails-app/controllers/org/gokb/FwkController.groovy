@@ -277,7 +277,7 @@ class FwkController {
         allOids.each { ao ->
           def oid_split = ao.trim().split(']', 2)
 
-          valueMaps.add([val: oid_split[1], oid: (oid_split[0].startsWith('id:org.gokb.cred') ? oid_split[0].substring(3) : null) ])
+          valueMaps.add([val: (oid_split.size() == 2 ? oid_split[1] : ""), oid: (oid_split[0].startsWith('id:org.gokb.cred') ? oid_split[0].substring(3) : null) ])
         }
       }
     }

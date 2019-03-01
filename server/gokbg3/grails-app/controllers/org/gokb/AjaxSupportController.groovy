@@ -102,7 +102,7 @@ class AjaxSupportController {
 
       GrailsClass dc = grailsApplication.getArtefact("Domain", 'org.gokb.cred.'+ config.domain)
 
-      if (dc.isTypeReadable()) {
+      if (dc?.getClazz()?.isTypeReadable()) {
         def cq = dc.getClazz().executeQuery(config.countQry,query_params);
         def rq = dc.getClazz().executeQuery(config.rowQry,
                                   query_params,
