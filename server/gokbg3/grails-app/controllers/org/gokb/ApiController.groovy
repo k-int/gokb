@@ -847,13 +847,8 @@ class ApiController {
   @Secured(['ROLE_USER', 'IS_AUTHENTICATED_FULLY'])
   def show() {
     def result = ['result':'OK', 'params': params]
-<<<<<<< 21d5bd5ad7c3f4e30fd0ad71b526b6fae5ca172b
     if (params.oid || params.id) {
       def obj = genericOIDService.resolveOID(params.oid ?: params.id)
-=======
-    if (params.oid) {
-      def obj = genericOIDService.resolveOID(params.oid)
->>>>>>> fixed es search, param check for api show
 
       if ( obj?.isReadable() ) {
 
@@ -882,11 +877,7 @@ class ApiController {
     }
     else {
       result.result = 'ERROR'
-<<<<<<< 21d5bd5ad7c3f4e30fd0ad71b526b6fae5ca172b
-      result.error = 'No object id supplied!'
-=======
       result.error = 'No OID supplied!'
->>>>>>> fixed es search, param check for api show
     }
 
     render result as JSON
