@@ -847,31 +847,37 @@ class ApiController {
   @Secured(['ROLE_USER', 'IS_AUTHENTICATED_FULLY'])
   def show() {
     def result = ['result':'OK', 'params': params]
-    def obj = genericOIDService.resolveOID(params.oid)
+    if (params.oid) {
+      def obj = genericOIDService.resolveOID(params.oid)
 
-    if ( obj?.isReadable() ) {
+      if ( obj?.isReadable() ) {
 
-      if(obj.class in KBComponent) {
+        if(obj.class in KBComponent) {
 
-        result.resource = obj.getAllPropertiesWithLinks(params.withCombos ? true : false)
+          result.resource = obj.getAllPropertiesWithLinks(params.withCombos ? true : false)
 
-        result.resource.combo_props = obj.allComboPropertyNames
+          result.resource.combo_props = obj.allComboPropertyNames
+        }
+        else if (obj.class.name == 'org.gokb.cred.User'){
+
+          result.resource = ['id': obj.id, 'username': obj.username, 'displayName': obj.displayName, 'curatoryGroups': obj.curatoryGroups]
+        }
+        else {
+          result.resource = obj
+        }
       }
-      else if (obj.class.name == 'org.gokb.cred.User'){
-
-        result.resource = ['id': obj.id, 'username': obj.username, 'displayName': obj.displayName, 'curatoryGroups': obj.curatoryGroups]
+      else if (!obj) {
+        result.error = "Object ID could not be resolved!"
+        result.result = 'ERROR'
       }
       else {
-        result.resource = obj
+        result.error = "Access to object was denied!"
+        result.result = 'ERROR'
       }
     }
-    else if (!obj) {
-      result.error = "Object ID could not be resolved!"
-      result.result = 'ERROR'
-    }
     else {
-      result.error = "Access to object was denied!"
       result.result = 'ERROR'
+      result.error = 'No OID supplied!'
     }
 
     render result as JSON
