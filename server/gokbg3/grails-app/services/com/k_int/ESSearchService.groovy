@@ -145,7 +145,8 @@ class ESSearchService{
         if ( params[mapping.key] instanceof String[] ) {
           log.debug("mapping is an arraylist: ${mapping} ${mapping.key} ${params[mapping.key]}")
           if(sw.toString()) sw.write(" AND ");
-          def plist = params[mapping.key]
+
+          def plist = params.list(mapping.key)
 
           plist.eachWithIndex { p, idx ->
             if (p) {
