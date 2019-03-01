@@ -8,6 +8,7 @@ class SavedSearch {
   String name
   User owner
   String searchDescriptor
+  Date dateCreated
 
   static constraints = {
     name blank: false, nullable:false
@@ -20,6 +21,7 @@ class SavedSearch {
     name column: 'ss_name'
     owner column: 'ss_owner_fk'
     searchDescriptor column: 'ss_search_descriptor', type:'text'
+    dateCreated column: 'ss_date_created'
   }
 
   public def toParam() {
