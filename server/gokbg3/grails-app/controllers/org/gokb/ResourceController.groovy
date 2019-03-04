@@ -53,6 +53,7 @@ class ResourceController {
         read_perm = displayobj.isTypeReadable()
 
         if (read_perm) {
+          result.displayobj = displayobj
 
           // Need to figure out whether the current user has curatorial rights (or is an admin).
           // Defaults to true as not all components have curatorial groups defined.
@@ -135,6 +136,7 @@ class ResourceController {
         render result as JSON
       }
     }
+    result
   }
 
   @Secured(['ROLE_USER', 'IS_AUTHENTICATED_FULLY'])
