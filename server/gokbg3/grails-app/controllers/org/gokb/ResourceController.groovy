@@ -29,27 +29,29 @@ class ResourceController {
     User user = springSecurityService.currentUser
 
     log.debug("ResourceController::show ${params}");
-    def result = [:]
+    def result = ['params':params]
     def oid = params.id
+    def displayobj = null
 
     if (params.type && params.id) {
       oid = "org.gokb.cred." + params.type + ":" + params.id
     }
 
     if ( oid ) {
-      result.displayobj = KBComponent.findByUuid(oid)
+      displayobj = KBComponent.findByUuid(oid)
 
-      if (!result.displayobj) {
-        result.displayobj = genericOIDService.resolveOID(oid)
+      if (!displayobj) {
+        displayobj = genericOIDService.resolveOID(oid)
       }
       else {
-        oid = "${result.displayobj?.class?.name}:${result.displayobj?.id}"
+        oid = "${displayobj?.class?.name}:${displayobj?.id}"
       }
       
-      if ( result.displayobj ) {
+      if ( displayobj ) {
 
-        def read_perm = result.displayobj?.isTypeReadable()
+        def read_perm = displayobj?.isTypeReadable()
         if (read_perm) {
+          result.displayobj = displayobj
 
           // Need to figure out whether the current user has curatorial rights (or is an admin).
           // Defaults to true as not all components have curatorial groups defined.
@@ -102,17 +104,10 @@ class ResourceController {
       }
       else {
         log.debug("unable to resolve object")
-        result = [:]
+        result.status = 404
       }
     }
-    withFormat {
-      html {
-        result
-      }
-      json {
-        render result as JSON
-      }
-    }
+    result
   }
 
   @Secured(['ROLE_USER', 'IS_AUTHENTICATED_FULLY'])
