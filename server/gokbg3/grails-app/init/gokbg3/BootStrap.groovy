@@ -718,8 +718,10 @@ class BootStrap {
     RefdataCategory.lookupOrCreate('Country','Zambia').save(flush:true, failOnError:true)
     RefdataCategory.lookupOrCreate('Country','Zimbabwe').save(flush:true, failOnError:true)
     //    RefdataCategory.lookupOrCreate("Combo.Type", "Content Provider").save()
-    RefdataCategory.lookupOrCreate("Combo.Status", "Active").save(flush:true, failOnError:true)
-    RefdataCategory.lookupOrCreate("Combo.Status", "Deleted").save(flush:true, failOnError:true)
+    RefdataCategory.lookupOrCreate("Combo.Status", Combo.STATUS_ACTIVE).save(flush:true, failOnError:true)
+    RefdataCategory.lookupOrCreate("Combo.Status", Combo.STATUS_DELETED).save(flush:true, failOnError:true)
+    RefdataCategory.lookupOrCreate("Combo.Status", Combo.STATUS_SUPERSEDED).save(flush:true, failOnError:true)
+    RefdataCategory.lookupOrCreate("Combo.Status", Combo.STATUS_EXPIRED).save(flush:true, failOnError:true)
 
     //    RefdataCategory.lookupOrCreate('ComboType','Unknown').save()
     //    RefdataCategory.lookupOrCreate('ComboType','Previous').save()
