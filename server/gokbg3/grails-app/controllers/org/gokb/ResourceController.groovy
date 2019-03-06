@@ -132,6 +132,7 @@ class ResourceController {
             result.resource = displayobj
           }
         }
+        render result as JSON
       }
     }
   }
