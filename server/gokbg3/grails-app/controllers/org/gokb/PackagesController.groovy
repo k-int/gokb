@@ -456,7 +456,6 @@ class PackagesController {
                 tipp.discard();
               }
           }
-
           tipps.close()
 
           writer.flush();
@@ -537,12 +536,11 @@ class PackagesController {
               tipp.discard();
             }
           }
-        }
+          tipps.close()
 
-        tipps.close()
-        
-        writer.flush();
-        writer.close();
+          writer.flush();
+          writer.close();
+        }
       out.close()
     }
     catch ( Exception e ) {

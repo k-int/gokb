@@ -90,11 +90,6 @@ class SecurityController {
 
       if(!for_acl) {
         log.warn("Could not find acl for ${domain}! It may have to be created manually..")
-        ObjectIdentity oi = new ObjectIdentityImpl(domain.class, domain.id);
-
-        log.debug("${oi}")
-
-        mutableAclService.createAcl(oi);
       }
 
       log.debug("\n\nCall gokbAclService.addPermission ${domain}(${domain.class.name}),${recipient},${perm}");
