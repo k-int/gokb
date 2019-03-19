@@ -215,7 +215,6 @@ class TitleInstancePackagePlatform extends KBComponent {
     def status_current = RefdataCategory.lookupOrCreate('KBComponent.Status','Current')
     def status_retired = RefdataCategory.lookupOrCreate('KBComponent.Status','Retired')
     def trimmed_url = tipp_dto.url ? tipp_dto.url.trim() : null
-    def url_mismatches = []
 
     if ( pkg && plt && ti ) {
       log.debug("See if we already have a tipp");
@@ -234,12 +233,10 @@ class TitleInstancePackagePlatform extends KBComponent {
               tipp = tipps[0]
             }
             else{
-              url_mismatches.add(tipps[0])
               log.debug("matched tipp has a different url..")
             }
           }
           else {
-            log.debug("No URL supplied!")
             tipp = tipps[0]
           } 
           break;
@@ -248,16 +245,13 @@ class TitleInstancePackagePlatform extends KBComponent {
           
           break;
         default:
-          def url_matched_tipps = []
-
           if ( trimmed_url && trimmed_url.size() > 0 ) {
-            url_matched_tipps = tipps.findAll { !it.url || it.url == tipp_dto.url };
-            log.debug("found ${url_matched_tipps.size()} tipps for URL ${tipp_dto.url}")
-            url_mismatches = tipps.findAll { it.url && it.url != tipp_dto.url };
+            tipps = tipps.findAll { !it.url || it.url == trimmed_url };
+            log.debug("found ${tipps.size()} tipps for URL ${trimmed_url}")
           }
         
-          def cur_tipps = url_matched_tipps.findAll { it.status == status_current };
-          def ret_tipps = url_matched_tipps.findAll { it.status == status_retired };
+          def cur_tipps = tipps.findAll { it.status == status_current };
+          def ret_tipps = tipps.findAll { it.status == status_retired };
           
           if ( cur_tipps.size() > 0 ){
             tipp = cur_tipps[0]
