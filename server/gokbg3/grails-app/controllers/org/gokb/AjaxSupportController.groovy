@@ -143,7 +143,7 @@ class AjaxSupportController {
       countQry:"select count(rdv) from RefdataValue as rdv where rdv.useInstead is null and rdv.owner.desc=?",
       rowQry:"select rdv from RefdataValue as rdv where rdv.useInstead is null and rdv.owner.desc=?",
       qryParams:[['cat': "Package Type"]],
-      rdvCat: "${params.id}",
+      rdvCat: "Package.Scope",
       cols:['value'],
       format:'simple'
     ],
@@ -706,6 +706,7 @@ class AjaxSupportController {
   @Secured(['ROLE_USER', 'IS_AUTHENTICATED_FULLY'])
   def editableSetValue() {
     log.debug("editableSetValue ${params}");
+    def user = springSecurityService.currentUser
     def target_object = resolveOID2(params.pk)
     def result = ['result': 'OK', 'params': params]
     def errors = []
