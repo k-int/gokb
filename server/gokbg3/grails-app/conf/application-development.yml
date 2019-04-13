@@ -1,0 +1,9 @@
+---
+grails:
+  plugin:
+    springsecurity:
+      rest:
+        token:
+          storage:
+            jwt:
+              secret: "YourSecretWTKeyGoesHereItMustBeAtleast256BitsLongAndYouAbsolutelyShouldSetOneUpAndNotJustCopyThisDefaultValueOr-bad-things--TM-couldHappenToYou"
