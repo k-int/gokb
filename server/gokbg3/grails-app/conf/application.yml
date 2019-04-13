@@ -1,5 +1,12 @@
 ---
 grails:
+    plugin: 
+        springsecurity:
+            rest:
+                login:
+                    endpointUrl: "/stateless/login"
+                logout:
+                    endpointUrl: "/stateless/logout"
     profile: web
     codegen:
         defaultPackage: gokbg3

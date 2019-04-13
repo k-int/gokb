@@ -31,13 +31,14 @@ grails.plugin.springsecurity.filterChain.chainMap = [
         [pattern: '/**/images/**',        filters: 'none'],
         [pattern: '/**/favicon.ico',      filters: 'none'],
         [pattern: '/error',               filters: 'none'],
-        [pattern: '/ajaxSupport/**',      filters: 'JOINED_FILTERS,-exceptionTranslationFilter'],
-        [pattern: '/fwk/**',              filters: 'JOINED_FILTERS,-exceptionTranslationFilter'],
-        [pattern: '/api/**',              filters: 'JOINED_FILTERS,-exceptionTranslationFilter'],
-        [pattern: '/integration/**',      filters: 'JOINED_FILTERS,-exceptionTranslationFilter'],
-        [pattern: '/packages/deposit',    filters: 'JOINED_FILTERS,-exceptionTranslationFilter'],
-        [pattern: '/admin/bulkLoadUsers', filters: 'JOINED_FILTERS,-exceptionTranslationFilter'],
-        [pattern: '/**',                  filters: 'JOINED_FILTERS,-basicAuthenticationFilter,-basicExceptionTranslationFilter'],
+        [pattern: '/ajaxSupport/**',      filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
+        [pattern: '/fwk/**',              filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
+        [pattern: '/api/**',              filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
+        [pattern: '/integration/**',      filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
+        [pattern: '/packages/deposit',    filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
+        [pattern: '/admin/bulkLoadUsers', filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
+        [pattern: '/**',                  filters: 'JOINED_FILTERS,-basicAuthenticationFilter,-basicExceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
+        [pattern: '/stateless/**',        filters: 'JOINED_FILTERS,-anonymousAuthenticationFilter,-exceptionTranslationFilter,-authenticationProcessingFilter,-securityContextPersistenceFilter,-rememberMeAuthenticationFilter']
 ]
 
 grails.plugin.springsecurity.controllerAnnotations.staticRules = [
