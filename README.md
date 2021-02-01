@@ -1,11 +1,13 @@
 gokb
 ====
 
+
 GOKb is an environment for managing the collaborative import, cleaning and maintaining of packages of e-resources. The focus is the supply of information around the administration and availability of print and electronic resources rather than specific bibliographic information. The goal of GOKb is to reduce the burden of data maintenance and editing on any one party by sharing the load over a collaborative network of subject matter experts. Because the information is global, and the same for everyone, the idea is to focus all our effort on editing one copy of the information that can then be freely reused and shared.
 
-# Previous repository
+# This repository
 
-GOKb development has moved here from https://github.com/k-int/gokb-phase1
+Is the original home of GOKb before it was forked to https://github.com/openlibraryenvironment/gokb/tree/g3_master. on 2021-02-01 this fork was merged back into the g3_master
+branch in order to review gokb as the basis for other new services in k-int and bring the service up to date.
 
 # Running GOKb in grails interactive mode
 
