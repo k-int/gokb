@@ -10,6 +10,8 @@ class ReviewRequest implements Auditable {
   @Transient
   def springSecurityService
 
+  def allComboPropertyNames = []
+
   KBComponent componentToReview
   String descriptionOfCause
   String reviewRequest
@@ -34,16 +36,6 @@ class ReviewRequest implements Auditable {
     additionalInfo column:'rr_additional_info', type:'text'
   }
 
-  transient public postCreateClosure = { ctx ->
-    log.debug("postCreateClosure(${ctx})");
-    if ( ctx.user != null ) {
-      if ( raisedBy == null )
-        raisedBy = ctx.user;
-      if ( allocatedTo == null )
-        allocatedTo = ctx.user;
-    }
-  }
-
   static constraints = {
     componentToReview(nullable:false, blank:false)
     descriptionOfCause(nullable:true, blank:true)
@@ -66,23 +58,42 @@ class ReviewRequest implements Auditable {
                                      String cause = null,
                                      User raisedBy = null,
                                      refineProject = null,
-                                     additionalInfo = null) {
+                                     additionalInfo = null,
+                                     RefdataValue stdDesc = null) {
 
     // Create a request.
     ReviewRequest req = new ReviewRequest (
         status : RefdataCategory.lookupOrCreate('ReviewRequest.Status', 'Open'),
         raisedBy : (raisedBy),
-        allocatedTo : (raisedBy),
         descriptionOfCause : (cause),
         reviewRequest : (actionRequired),
         refineProject : (refineProject),
+        stdDesc : (stdDesc),
         additionalInfo : (additionalInfo),
         componentToReview : (forComponent)
         ).save(failOnError:true);
 
     // Just return the request.
+
+    if ( req && raisedBy ) {
+      new ReviewRequestAllocationLog(allocatedTo:raisedBy, rr:req).save(failOnError:true)
+    }
+
     req
   }
+
+  public static final String restPath = "/reviews"
+
+  static jsonMapping = [
+    'ignore'       : [
+      'refineProject',
+      'additionalInfo',
+      'needsNotify'
+    ],
+    'defaultEmbeds': [
+      'allocatedGroups'
+    ]
+  ]
 
   String getLogEntityId() {
       "${this.class.name}:${id}"
@@ -118,6 +129,48 @@ class ReviewRequest implements Auditable {
     return "Review Request";
   }
 
+  def getAllocatedGroups() {
+    return AllocatedReviewGroup.findAllByReview(this)
+  }
+
+  def allocateGroup(group) {
+    def result = false
+    def existing = AllocatedReviewGroup.findAllByReviewAndGroup(this, group)
+
+    if (!existing) {
+      AllocatedReviewGroup.create(group, this)
+      result = true
+    }
+
+    result
+  }
+
+  def claim(group) {
+    def result = true
+    def existing = this.allocatedGroups
+
+    if (existing.collect {it.group == group}?.size() > 0) {
+      existing.each { eg ->
+        if (eg.group != group && eg.status != null) {
+          result = false
+        }
+      }
+    }
+    else {
+      result = false
+    }
+
+    result
+  }
+
+  def afterInsert() {
+    def user = springSecurityService?.currentUser
+    if ( user != null ) {
+      if ( raisedBy == null )
+        raisedBy = user
+    }
+  }
+
   def beforeUpdate() {
     if ( isDirty('status') ) {
       log.debug("RR Status changed > ${this.status}")
@@ -137,6 +190,11 @@ class ReviewRequest implements Auditable {
       result = JSON.parse(additionalInfo);
     }
     result;
+  }
+
+  def getAllocationLog() {
+    def result = ReviewRequestAllocationLog.executeQuery("from ReviewRequestAllocationLog where rr = ?",[this])
+    result
   }
 
   @Transient

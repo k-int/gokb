@@ -7,6 +7,16 @@ grails:
                     endpointUrl: "/stateless/login"
                 logout:
                     endpointUrl: "/stateless/logout"
+    config:
+        locations:
+            - ~/.grails/gokb-config.groovy
+            - ~/.grails/gokb-config.yml
+            - ~/.grails/gokb-config.properties
+    cors:
+        enabled: true
+        mappings:
+            /rest/**: inherit
+
     profile: web
     codegen:
         defaultPackage: gokbg3
@@ -21,6 +31,9 @@ grails:
     mime:
         file:
             extensions: false
+        use:
+            accept:
+                header: true
         disable:
             accept:
                 header:
@@ -36,30 +49,30 @@ grails:
             csv: text/csv
             form: application/x-www-form-urlencoded
             html:
-              - text/html
-              - application/xhtml+xml
+                - text/html
+                - application/xhtml+xml
             js: text/javascript
             json:
-              - application/json
-              - text/json
+                - application/json
+                - text/json
             multipartForm: multipart/form-data
             pdf: application/pdf
             rss: application/rss+xml
             text: text/plain
             hal:
-              - application/hal+json
-              - application/hal+xml
+                - application/hal+json
+                - application/hal+xml
             xml:
-              - text/xml
-              - application/xml
+                - text/xml
+                - application/xml
     urlmapping:
         cache:
             maxsize: 1000
     controllers:
         defaultScope: singleton
         upload:
-            maxFileSize: 2000000
-            maxRequestSize: 2000000
+            maxFileSize: 50000000
+            maxRequestSize: 50000000
     converters:
         encoding: UTF-8
     views:
@@ -79,11 +92,21 @@ grails:
                 - password
                 - password2
                 - email
+    plugin:
+        springsecurity:
+            rest:
+                token:
+                    validation:
+                        endpointUrl: /rest/validate
+                login:
+                    endpointUrl: /rest/login
+                logout:
+                    endpointUrl: /rest/logout
 info:
     app:
         name: '@info.app.name@'
         version: '@info.app.version@'
-        grailsVersion: '@info.app.grailsVersion@'
+        grailsVersion: '@info.grails.version@'
 
 spring:
     main:
@@ -135,9 +158,16 @@ environments:
             mail:
                 port: 3025
         gokb:
+            ygorUrl: null
+            packageUpdate:
+                enabled: false
             es:
                 index: gokbg3dev
                 cluster: gokbg3-dev
+            tsvExportTempDirectory: /tmp/gokb/export
+        cache:
+            headers:
+                enabled: false
     test:
         dataSource:
             dbCreate: create-drop
@@ -159,6 +189,9 @@ environments:
                 validationQuery: select 1
                 defaultTransactionIsolation: java.sql.Connection.TRANSACTION_READ_COMMITTED
         gokb:
+            ygorUrl: null
+            packageUpdate:
+                enabled: false
             es:
                 index: gokbg3test
                 cluster: gokbg3-test
@@ -167,11 +200,16 @@ environments:
                 port: 3025
         quartz:
             pluginEnabled: false
+        cache:
+            headers:
+                enabled: false
+        javamelody:
+            disabled: true
     production:
         dataSource:
             dbCreate: update
-            url: jdbc:postgresql://pghost:5432/gokbg3
-            username: knowint
+            url: jdbc:postgresql://localhost:5432/gokbg3
+            username: gokb
             password: knowint
             driverClassName: org.postgresql.Driver
             dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -192,6 +230,9 @@ environments:
                 greenmail:
                     disabled: true
         gokb:
+            packageUpdate:
+                enabled: false
+            ygorUrl: null
             es:
                 index: gokbg3
                 cluster: gokbg3-prod
@@ -199,8 +240,11 @@ environments:
 gokb:
     defaultCuratoryGroup: Local
     ftupdate_enabled: true
-    decisionSupport: false
+    decisionSupport:
+        active: false
+        otherVoters: false
     costInfo: false
 
 quartz:
     autoStartup: true
+    waitForJobsToCompleteOnShutdown: false

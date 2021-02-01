@@ -14,8 +14,10 @@ buildscript {
         classpath "org.grails.plugins:hibernate5:${gormVersion-".RELEASE"}"
         classpath "com.bertramlabs.plugins:asset-pipeline-gradle:2.14.8"
         // Experiment with guide from http://guides.grails.org/grails-as-docker-container/guide/index.html
-        classpath "com.bmuschko:gradle-docker-plugin:3.2.5" 
+        classpath "com.bmuschko:gradle-docker-plugin:3.2.5"
         classpath 'org.grails.plugins:database-migration:3.0.3'
+        // Fixing too long classpath in Windows development environment
+        classpath "gradle.plugin.ua.eshepelyuk:ManifestClasspath:1.0.0"
     }
 }
 
@@ -33,6 +35,8 @@ apply plugin:"asset-pipeline"
 apply plugin:"org.grails.grails-gsp"
 apply plugin:"com.bmuschko.docker-remote-api"
 apply plugin:"org.grails.grails-doc"
+// Fixing too long classpath in Windows development environment
+apply plugin: "ua.eshepelyuk.ManifestClasspath"
 
 repositories {
     mavenLocal()
@@ -65,13 +69,15 @@ dependencies {
     compile "org.grails.plugins:gsp"
     compile "org.grails.plugins:mail:2.0.0"
     compile 'org.grails.plugins:greenmail:2.0.0.RC2'
-    compile 'org.grails.plugins:cache-headers:2.0.1'
+    compile 'org.grails.plugins:cache-headers:2.0.2'
     compile 'org.grails.plugins:database-migration:3.0.3'
+    compile 'org.grails.plugins:grails-melody-plugin:1.80.0'
 
     compile 'org.grails.plugins:spring-security-core:3.2.3'
     compile 'org.grails.plugins:spring-security-acl:3.2.1'
     compile 'org.grails.plugins:spring-security-ui:3.1.2'
     compile 'org.grails.plugins:spring-security-rest:2.0.0.RC1'
+    compile 'org.grails.plugins:spring-security-rest-grailscache:2.0.0.RC1'
     compile group: 'org.apache.httpcomponents', name: 'httpcore', version: '4.4.9'
     compile group: 'commons-io', name: 'commons-io', version: '2.6'
     compile group: 'org.aspectj', name: 'aspectjweaver', version: '1.8.13'
@@ -87,23 +93,23 @@ dependencies {
     compile 'org.grails.plugins:grails-executor:0.4'
     compile 'org.grails.plugins:audit-logging:3.0.0'
     compile 'org.liquibase:liquibase-core:3.5.3'
+    compile 'org.grails.plugins:external-config:1.4.0'
 
     // This  is for rest integration tests -  see more at
     //  http://guides.grails.org/grails-controller-testing/guide/index.html
     //  and https://github.com/grails-plugins/grails-rest-client-builder
     compile 'org.grails:grails-datastore-rest-client'
 
-
     console "org.grails:grails-console"
     profile "org.grails.profiles:web"
     runtime "org.glassfish.web:el-impl:2.1.2-b03"
     // https://mvnrepository.com/artifact/org.postgresql/postgresql
-    compile group: 'org.postgresql', name: 'postgresql', version: '42.2.1'
+    compile group: 'org.postgresql', name: 'postgresql', version: '42.2.10'
     runtime "com.h2database:h2"
     runtime "org.apache.tomcat:tomcat-jdbc"
     runtime "com.bertramlabs.plugins:asset-pipeline-grails:2.14.10"
     assets 'com.bertramlabs.plugins:less-asset-pipeline:2.14.10'
-    
+
     testCompile "org.grails:grails-gorm-testing-support"
     testCompile "org.grails:grails-web-testing-support"
     testCompile "org.grails.plugins:geb"
@@ -112,17 +118,18 @@ dependencies {
     testRuntime "org.seleniumhq.selenium:selenium-remote-driver:3.141.59"
     testRuntime "org.seleniumhq.selenium:selenium-api:3.141.59"
     testRuntime 'com.bertramlabs.plugins:less-asset-pipeline:2.14.10'
+    testRuntime "org.apache.httpcomponents:httpclient"
 }
 
 bootRun {
-    jvmArgs('-Dspring.output.ansi.enabled=always')
+    jvmArgs = ['-Dspring.output.ansi.enabled=always','-Xmx2g']
     addResources = true
 }
 
 buildProperties.doLast {
     // Find the right file
 
-    File grailsBuildInfoFile = it.outputs.files.files.find { it.name == 'grails.build.info' }
+    File grailsBuildInfoFile = (File)it.outputs.files.files.find { it.name == 'grails.build.info' }
     File grailsGitInfoFile = file("$buildDir/resources/main/git.properties")
     if(!grailsBuildInfoFile) {
       println "Build file not found!"
@@ -152,7 +159,6 @@ buildProperties.doLast {
     // Get the host name where the build was created
     // properties.setProperty('build.host', InetAddress.localHost.hostName)
 
-    Map<String, String> env = System.getenv()
     if(grailsGitInfoFile) {
         properties.setProperty('build.git.revision', gitProperties.getProperty('git.commit.id.abbrev'))
         properties.setProperty('build.git.branch', gitProperties.getProperty('git.branch'))
@@ -202,17 +208,17 @@ assets {
 // http://guides.grails.org/grails-as-docker-container/guide/index.html
 // Build docker image:: ./gradlew buildImage
 // ./gradlew dockerPushImage should push the image, but it is better to use the commands below to do that
-// 
+//
 // list know docker images  :: docker images
 // Logon to docker hub:: docker login --username=yourhubusername
 // Push image to docker hub::   docker push knowint/gokbg3
 
 ext {
-    dockerTag = "knowint/${project.name}:${project.version}".toLowerCase() 
-    dockerBuildDir = mkdir("${buildDir}/docker") 
+    dockerTag = "knowint/${project.name}:${project.version}".toLowerCase()
+    dockerBuildDir = mkdir("${buildDir}/docker")
 }
 
-task prepareDocker(type: Copy, dependsOn: assemble) { 
+task prepareDocker(type: Copy, dependsOn: assemble) {
     description = 'Copy files from src/main/docker and application jar to Docker temporal build directory'
     group = 'Docker'
 
@@ -222,7 +228,7 @@ task prepareDocker(type: Copy, dependsOn: assemble) {
     into dockerBuildDir
 }
 
-task createDockerfile(type: Dockerfile, dependsOn: prepareDocker) { 
+task createDockerfile(type: Dockerfile, dependsOn: prepareDocker) {
     description = 'Create a Dockerfile file'
     group = 'knowint'
 
@@ -236,13 +242,13 @@ task createDockerfile(type: Dockerfile, dependsOn: prepareDocker) {
     workingDir '/app'
 
     copyFile war.archiveName, 'application.jar'
-    copyFile 'app-entrypoint.sh', 'app-entrypoint.sh' 
+    copyFile 'app-entrypoint.sh', 'app-entrypoint.sh'
     runCommand 'chmod +x app-entrypoint.sh'
 
-    entryPoint '/app/app-entrypoint.sh' 
+    entryPoint '/app/app-entrypoint.sh'
 }
 
-task buildImage(type: DockerBuildImage, dependsOn: createDockerfile) { 
+task buildImage(type: DockerBuildImage, dependsOn: createDockerfile) {
     description = 'Create Docker image to run the Grails application'
     group = 'knowint'
 

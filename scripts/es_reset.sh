@@ -7,12 +7,12 @@ echo Drop old index
 curl -XDELETE "http://localhost:9200/$INDEXNAME"
 
 echo \\nCreate index
-curl -X PUT "localhost:9200/$INDEXNAME" -d '{
+curl -X PUT "localhost:9200/$INDEXNAME" -H 'Content-Type: application/json' -d '{
   "settings": {
-      "number_of_shards": 1, 
+      "number_of_shards": 1,
       "analysis": {
           "filter": {
-              "autocomplete_filter": { 
+              "autocomplete_filter": {
                   "type":     "edge_ngram",
                   "min_gram": 1,
                   "max_gram": 20
@@ -24,7 +24,7 @@ curl -X PUT "localhost:9200/$INDEXNAME" -d '{
                   "tokenizer": "standard",
                   "filter": [
                       "lowercase",
-                      "autocomplete_filter" 
+                      "autocomplete_filter"
                   ]
               }
           }
@@ -33,15 +33,33 @@ curl -X PUT "localhost:9200/$INDEXNAME" -d '{
 }'
 
 echo \\nCreate component mapping
-curl -X PUT "localhost:9200/$INDEXNAME/component/_mapping" -d '{
+curl -X PUT "localhost:9200/$INDEXNAME/component/_mapping" -H 'Content-Type: application/json' -d '{
   "component" : {
     "dynamic_templates": [
       {
         "provider": {
-          "match": "provider",
+          "match": "provider*",
           "match_mapping_type": "string",
           "mapping": {
             "type": "keyword"
+          }
+        }
+      },
+      {
+        "dateFirstInPrint": {
+          "match": "dateFirstInPrint",
+          "mapping": {
+            "type": "date",
+            "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd'\''T'\''HH:mm:ssZ||epoch_millis"
+          }
+        }
+      },
+      {
+        "dateFirstOnline": {
+          "match": "dateFirstOnline",
+          "mapping": {
+            "type": "date",
+            "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd'\''T'\''HH:mm:ssZ||epoch_millis"
           }
         }
       },
@@ -56,7 +74,7 @@ curl -X PUT "localhost:9200/$INDEXNAME/component/_mapping" -d '{
       },
       {
         "publisher": {
-          "match": "publisher",
+          "match": "publisher*",
           "match_mapping_type": "string",
           "mapping": {
             "type": "keyword"
@@ -74,7 +92,7 @@ curl -X PUT "localhost:9200/$INDEXNAME/component/_mapping" -d '{
       },
       {
         "package": {
-          "match": "tippPackage",
+          "match": "tippPackage*",
           "match_mapping_type": "string",
           "mapping": {
             "type": "keyword"
@@ -83,7 +101,7 @@ curl -X PUT "localhost:9200/$INDEXNAME/component/_mapping" -d '{
       },
       {
         "title": {
-          "match": "tippTitle",
+          "match": "tippTitle*",
           "match_mapping_type": "string",
           "mapping": {
             "type": "keyword"
@@ -92,7 +110,7 @@ curl -X PUT "localhost:9200/$INDEXNAME/component/_mapping" -d '{
       },
       {
         "hostPlatform": {
-          "match": "hostPlatform",
+          "match": "hostPlatform*",
           "match_mapping_type": "string",
           "mapping": {
             "type": "keyword"
@@ -119,7 +137,7 @@ curl -X PUT "localhost:9200/$INDEXNAME/component/_mapping" -d '{
       },
       {
         "nominalPlatform": {
-          "match": "nominalPlatform",
+          "match": "nominalPlatform*",
           "match_mapping_type": "string",
           "mapping": {
             "type": "keyword"
@@ -134,12 +152,39 @@ curl -X PUT "localhost:9200/$INDEXNAME/component/_mapping" -d '{
             "type": "keyword"
           }
         }
+      },
+      {
+        "scope": {
+          "match": "scope",
+          "match_mapping_type": "string",
+          "mapping": {
+            "type": "keyword"
+          }
+        }
+      },
+      {
+        "contentType": {
+          "match": "contentType",
+          "match_mapping_type": "string",
+          "mapping": {
+            "type": "keyword"
+          }
+        }
+      },
+      {
+        "titleType": {
+          "match": "titleType",
+          "match_mapping_type": "string",
+          "mapping": {
+            "type": "keyword"
+          }
+        }
       }
     ],
     "properties" : {
       "name" : {
         "type" : "text",
-	"copy_to" : "suggest",
+        "copy_to" : "suggest",
         "fields" : {
           "name" : { "type" : "text" },
           "altname" : { "type" : "text" }
@@ -149,7 +194,15 @@ curl -X PUT "localhost:9200/$INDEXNAME/component/_mapping" -d '{
         "type" : "nested",
         "properties": {
           "namespace": { "type": "keyword"},
+          "namespaceName": { "type": "keyword"},
           "value": { "type": "keyword"}
+        }
+      },
+      "source" : {
+        "type" : "nested",
+        "properties": {
+          "frequency": { "type": "keyword"},
+          "url": { "type": "keyword"}
         }
       },
       "sortname" : {
@@ -157,6 +210,10 @@ curl -X PUT "localhost:9200/$INDEXNAME/component/_mapping" -d '{
       },
       "componentType" : {
         "type": "keyword"
+      },
+      "lastUpdatedDisplay" : {
+        "type": "date",
+        "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd'\''T'\''HH:mm:ssZ||epoch_millis"
       },
       "uuid" : {
         "type": "keyword"

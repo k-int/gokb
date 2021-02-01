@@ -4,7 +4,7 @@
 
 import com.k_int.TextUtils
 import org.gokb.cred.KBComponent
-import org.gokb.validation.types.*
+//import org.gokb.validation.types.*
 import java.util.concurrent.Executors
 
 kbart2.mappings= [
@@ -417,7 +417,7 @@ environments {
     // TODO: grails.serverURL = "http://www.changeme.com"
   }
   test {
-    grails.serverURL = "http://localhost:${ System.getProperty("server.port")?:'8080' }/${appName}"
+    grails.serverURL = "http://localhost:$server.port/$appName"
   }
 }
 
@@ -503,6 +503,7 @@ grails.plugin.springsecurity.ui.register.emailSubject = 'Welcome to GOKb'
 grails.plugin.springsecurity.ui.register.defaultRoleNames = [
   "ROLE_USER"
 ]
+grails.plugin.springsecurity.ui.register.postRegisterUrl = '/home/index'
 // The following 2 entries make the app use basic auth by default
 grails.plugin.springsecurity.useBasicAuth = true
 grails.plugin.springsecurity.basic.realmName = "gokb"

@@ -1,20 +1,26 @@
 package gokbg3
 
-import grails.testing.mixin.integration.Integration
-import grails.transaction.*
-import spock.lang.Specification
-import spock.lang.Shared
+import grails.core.GrailsApplication
 import grails.plugins.rest.client.RestBuilder
 import grails.plugins.rest.client.RestResponse
+import grails.testing.mixin.integration.Integration
+import grails.transaction.*
 import org.springframework.core.io.ClassPathResource
 import org.springframework.core.io.Resource
 import org.springframework.beans.factory.annotation.*
 import org.springframework.web.context.WebApplicationContext
+import spock.lang.Ignore
+import spock.lang.Specification
+import spock.lang.Shared
 
 
 @Integration
 @Rollback
+@Ignore
 class PackageUploadSpec extends Specification {
+
+
+    GrailsApplication grailsApplication
 
     @Shared
     RestBuilder rest = new RestBuilder()
@@ -40,8 +46,8 @@ class PackageUploadSpec extends Specification {
       Resource jac_upload_file_resource = new ClassPathResource("/test_archival_format.tsv")
 
       when:
-        // RestResponse resp = rest.get("http://localhost:${serverPort}/search/search")
-        RestResponse resp = rest.post("http://localhost:${serverPort}/packages/deposit") {
+        // RestResponse resp = authRest.get("http://localhost:${serverPort}/search/search")
+        RestResponse resp = rest.post("http://localhost:${serverPort}${grailsApplication.config.server.contextPath ?: ''}/packages/deposit") {
           auth 'admin', 'admin'
           contentType "multipart/form-data"
           // String properties

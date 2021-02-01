@@ -31,14 +31,16 @@ grails.plugin.springsecurity.filterChain.chainMap = [
         [pattern: '/**/images/**',        filters: 'none'],
         [pattern: '/**/favicon.ico',      filters: 'none'],
         [pattern: '/error',               filters: 'none'],
-        [pattern: '/ajaxSupport/**',      filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
-        [pattern: '/fwk/**',              filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
-        [pattern: '/api/**',              filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
-        [pattern: '/integration/**',      filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
-        [pattern: '/packages/deposit',    filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
-        [pattern: '/admin/bulkLoadUsers', filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
+        [pattern: '/ajaxSupport/**',      filters: 'JOINED_FILTERS,-exceptionTranslationFilter'],
+        [pattern: '/fwk/**',              filters: 'JOINED_FILTERS,-exceptionTranslationFilter'],
+        [pattern: '/api/**',              filters: 'JOINED_FILTERS,-exceptionTranslationFilter'],
+        [pattern: '/integration/**',      filters: 'JOINED_FILTERS,-exceptionTranslationFilter'],
+        [pattern: '/admin/bulkLoadUsers', filters: 'JOINED_FILTERS,-exceptionTranslationFilter'],
+        [pattern: '/rest/login',          filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-basicAuthenticationFilter,-basicExceptionTranslationFilter,-authenticationProcessingFilter,-securityContextPersistenceFilter,-rememberMeAuthenticationFilter'],
+        [pattern: '/rest/**/**',          filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-basicAuthenticationFilter,-basicExceptionTranslationFilter,-securityContextPersistenceFilter,-rememberMeAuthenticationFilter'],
+        [pattern: '/rest/**',             filters: 'JOINED_FILTERS,-exceptionTranslationFilter,-basicAuthenticationFilter,-basicExceptionTranslationFilter,-securityContextPersistenceFilter,-rememberMeAuthenticationFilter'],
+        [pattern: '/oauth/**',            filters: 'JOINED_FILTERS,-exceptionTranslationFilter'],
         [pattern: '/**',                  filters: 'JOINED_FILTERS,-basicAuthenticationFilter,-basicExceptionTranslationFilter,-restTokenValidationFilter,-restExceptionTranslationFilter'],
-        [pattern: '/stateless/**',        filters: 'JOINED_FILTERS,-anonymousAuthenticationFilter,-exceptionTranslationFilter,-authenticationProcessingFilter,-securityContextPersistenceFilter,-rememberMeAuthenticationFilter']
 ]
 
 grails.plugin.springsecurity.controllerAnnotations.staticRules = [
@@ -50,11 +52,16 @@ grails.plugin.springsecurity.controllerAnnotations.staticRules = [
   [pattern: '/greenmail/**',            access: ['ROLE_SUPERUSER', 'IS_AUTHENTICATED_FULLY']],
   [pattern: '/',                        access: ['permitAll']],
   [pattern: '/index',                   access: ['permitAll']],
+  [pattern: '/notFound',                access: ['permitAll']],
   [pattern: '/index.gsp',               access: ['permitAll']],
   [pattern: '/register/**',             access: ['permitAll']],
-  [pattern: '/packages/**',             access: ['permitAll']],
   [pattern: '/public/**',               access: ['permitAll']],
+  [pattern: '/package/**',              access: ['permitAll']],
+  [pattern: '/packages/**',             access: ['permitAll']],
+  [pattern: '/component/identifierConflicts', access: ['ROLE_EDITOR', 'IS_AUTHENTICATED_FULLY']],
   [pattern: '/public',                  access: ['permitAll']],
+  [pattern: '/error',                   access: ['permitAll']],
+  [pattern: '/error/**',                access: ['permitAll']],
   [pattern: '/globalSearch/**',         access: ['ROLE_USER']],
   [pattern: '/home/**',                 access: ['ROLE_USER']],
   [pattern: '/assets/**',               access: ['permitAll']],
@@ -63,6 +70,7 @@ grails.plugin.springsecurity.controllerAnnotations.staticRules = [
   [pattern: '/**/images/**',            access: ['permitAll']],
   [pattern: '/**/favicon.ico',          access: ['permitAll']],
   [pattern: '/api/find',                access: ['permitAll']],
+  [pattern: '/api/scroll',              access: ['permitAll']],
   [pattern: '/api/suggest',             access: ['permitAll']],
   [pattern: '/api/esconfig',            access: ['permitAll']],
   [pattern: '/api/capabilities',        access: ['permitAll']],
@@ -73,6 +81,8 @@ grails.plugin.springsecurity.controllerAnnotations.staticRules = [
   [pattern: '/api/refdata',             access: ['ROLE_USER']],
   [pattern: '/api/show',                access: ['ROLE_USER']],
   [pattern: '/api/namespaces',          access: ['permitAll']],
+  [pattern: '/api/groups',              access: ['permitAll']],
+  [pattern: '/integration/**',          access: ['permitAll']],
   [pattern: '/fwk/**',                  access: ['ROLE_USER']],
   [pattern: '/user/**',                 access: ['ROLE_SUPERUSER', 'IS_AUTHENTICATED_FULLY']],
   [pattern: '/user/search',             access: ['ROLE_ADMIN', 'IS_AUTHENTICATED_FULLY']],
@@ -86,6 +96,14 @@ grails.plugin.springsecurity.controllerAnnotations.staticRules = [
   [pattern: '/aclEntry/**',             access: ['ROLE_SUPERUSER', 'IS_AUTHENTICATED_FULLY']],
   [pattern: '/oai',                     access: ['permitAll']],
   [pattern: '/oai/**',                  access: ['permitAll']],
+  [pattern: '/rest/login',              access: ['permitAll']],
+ // [pattern: '/rest/roles',              access: ['permitAll']],
+  //[pattern: '/rest/curatoryGroups',     access: ['permitAll']],
+  //[pattern: '/rest/curatoryGroups/**',  access: ['permitAll']],
+  [pattern: '/rest/refdata',            access: ['permitAll']],
+  [pattern: '/rest/refdata/**',         access: ['permitAll']],
+  [pattern: '/rest/**',                 access: ['ROLE_USER', 'IS_AUTHENTICATED_FULLY']],
+  [pattern: '/oauth/**',                access: ['permitAll']],
   [pattern: '/coreference/**',          access: ['permitAll']]
 ]
 
@@ -147,7 +165,7 @@ globalSearchTemplates = [
          'qparam':'qp_onlyCurrent', 'default':'on', 'cat':'KBComponent.Status', 'type': 'java.lang.Object']
       ],
       qbeResults:[
-        [heading:'Type', property:'class.simpleName'],
+        [heading:'Type', property:'niceName'],
         [heading:'Name/Title', property:'name',sort:'name', link:[controller:'resource',action:'show',id:'x.r.class.name+\':\'+x.r.id'] ],
         [heading:'Status', property:'status?.value',sort:'status'],
         [heading:'Edit Status', property:'editStatus?.value',sort:'editStatus'],
@@ -206,6 +224,15 @@ globalSearchTemplates = [
         ],
         [
           type:'lookup',
+          baseClass:'org.gokb.cred.RefdataValue',
+          filter1:'Package.ContentType',
+          prompt:'Content Type',
+          qparam:'qp_content',
+          placeholder:'Content Type',
+          contextTree:['ctxtp':'qry', 'comparator' : 'eq', 'prop':'contentType'],
+        ],
+        [
+          type:'lookup',
           baseClass:'org.gokb.cred.Org',
           prompt:'Provider',
           qparam:'qp_provider',
@@ -231,15 +258,23 @@ globalSearchTemplates = [
           contextTree:[ 'ctxtp':'qry', 'comparator' : 'eq', 'prop':'nominalPlatform'],
           hide:false
         ],
+        [
+          prompt:'Platform ID',
+          qparam:'qp_platform_id',
+          placeholder:'Platform ID',
+          contextTree:['ctxtp' : 'qry', 'comparator' : 'eq', 'prop' : 'nominalPlatform.id', 'type' : 'java.lang.Long'],
+          hide:true
+        ],
       ],
       qbeGlobals:[
         ['ctxtp':'filter', 'prop':'status', 'comparator' : 'eq', 'value':'Current', 'negate' : false, 'prompt':'Only Current',
          'qparam':'qp_onlyCurrent', 'default':'on', 'cat':'KBComponent.Status', 'type': 'java.lang.Object']
       ],
       qbeResults:[
-        [heading:'Provider', property:'provider?.name'],
+        [heading:'Provider', property:'provider?.name', link:true],
         [heading:'Name', property:'name',sort:'name', link:[controller:'resource',action:'show',id:'x.r.class.name+\':\'+x.r.id'] ],
         [heading:'Nominal Platform', property:'nominalPlatform?.name'],
+        [heading:'Content Type', property:'contentType?.value', sort:'contentType'],
         [heading:'Availability', property:'global', sort:'global'],
         [heading:'List Status', property:'listStatus?.value',sort:'listStatus'],
         [heading:'Last Updated', property:'lastUpdated',sort:'lastUpdated'],
@@ -572,27 +607,20 @@ globalSearchTemplates = [
           contextTree:['ctxtp':'qry', 'comparator' : 'eq', 'prop':'status']
         ],
         [
-          type:'lookup',
-          baseClass:'org.gokb.cred.User',
-          prompt:'Raised By',
-          qparam:'qp_raisedby',
-          placeholder:'Raised By',
-          contextTree:['ctxtp':'qry', 'comparator' : 'eq', 'prop':'raisedBy']
-        ],
-        [
-          type:'lookup',
-          baseClass:'org.gokb.cred.User',
-          prompt:'Allocated To',
-          qparam:'qp_allocatedto',
-          placeholder:'Allocated To',
-          contextTree:['ctxtp':'qry', 'comparator' : 'eq', 'prop':'allocatedTo']
-        ],
-        [
           prompt:'Cause',
           qparam:'qp_cause',
           placeholder:'Cause',
           contextTree:['ctxtp':'qry', 'comparator' : 'like', 'prop':'descriptionOfCause']
-        ]
+        ],
+        [
+          type:'lookup',
+          baseClass:'org.gokb.cred.RefdataValue',
+          filter1:'ReviewRequest.StdDesc',
+          prompt:'Type',
+          qparam:'qp_desc',
+          placeholder:'Standard description',
+          contextTree:['ctxtp':'qry', 'comparator' : 'eq', 'prop':'stdDesc']
+        ],
       ],
       qbeGlobals:[
       ],
@@ -701,7 +729,9 @@ globalSearchTemplates = [
   'Users':[
     baseclass:'org.gokb.cred.User',
     title:'Users',
-    group:'Secondary',
+    group:'Admin',
+    defaultSort:'id',
+    defaultOrder:'asc',
     qbeConfig:[
       qbeForm:[
         [
@@ -715,6 +745,11 @@ globalSearchTemplates = [
       ],
       qbeResults:[
         [heading:'Username', property:'username', link:[controller:'resource',action:'show',id:'x.r.class.name+\':\'+x.r.id'] ],
+        [heading:'Enabled', property:'enabled'],
+        [heading:'Contributor', property:'contributorStatus'],
+        [heading:'Editor', property:'editorStatus'],
+        [heading:'API-User', property:'apiUserStatus'],
+        [heading:'Admin', property:'adminStatus']
         // [heading:'Username', property:'username', link:[controller:'search',action:'index',params:'x.params+[\'det\':x.counter]']]
       ]
     ]
@@ -868,9 +903,11 @@ globalSearchTemplates = [
       qbeGlobals:[
       ],
       qbeResults:[
-        [heading:'Name', property:'value', link:[controller:'resource',action:'show',id:'x.r.class.name+\':\'+x.r.id'] ],
+        [heading:'Value', property:'value', link:[controller:'resource',action:'show',id:'x.r.class.name+\':\'+x.r.id'] ],
+        [heading:'Name', property:'name' ],
         [heading:'RDF Datatype', property:'datatype?.value'],
-        [heading:'Category', property:'family']
+        [heading:'Category', property:'family'],
+        [heading:'Target Type', property:'targetType.value']
       ]
     ]
   ],
@@ -1141,6 +1178,36 @@ globalSearchTemplates = [
       qbeResults:[
         [heading:'Name/Title', property:'displayName', link:[controller:'resource', action:'show',      id:'x.r.linkedItem.class.name+\':\'+x.r.linkedItem.id'] ],
         [heading:'Availability', property:'linkedItem.tipps?.size()?:"none"'],
+      ]
+    ]
+  ],
+  'JobResult':[
+    baseclass:'org.gokb.cred.JobResult',
+    title:'Job Results',
+    group:'Secondary',
+    defaultSort:'id',
+    defaultOrder:'desc',
+    qbeConfig:[
+      qbeForm:[
+       [
+          type:'lookup',
+          baseClass:'org.gokb.cred.RefdataValue',
+          filter1:'Job.Type',
+          prompt:'Type',
+          qparam:'qp_type',
+          placeholder:'Type of Job',
+          contextTree:['ctxtp':'qry', 'comparator' : 'eq', 'prop':'type']
+        ],
+      ],
+      qbeGlobals:[
+        ['ctxtp':'filter', 'prop':'ownerId', 'comparator' : 'eq', 'value':'__USERID', 'default':'on', 'qparam':'qp_owner', 'type':'java.lang.Long', 'hidden':true]
+      ],
+      qbeResults:[
+        [heading:'Description', property:'description', link:[controller:'resource', action:'show', id:'x.r.uuid'] ],
+        [heading:'Type', property:'type?.value', sort:'type'],
+        [heading:'Status', property:'statusText'],
+        [heading:'Start Time', property:'startTime',sort:'startTime'],
+        [heading:'End Time', property:'endTime',sort:'endTime'],
       ]
     ]
   ],

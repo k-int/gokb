@@ -11,6 +11,7 @@ class UserOrganisation extends Party {
 
   
   User owner
+  RefdataValue mission
 
   static constraints = {
     owner (nullable:true, blank:false)
@@ -27,6 +28,8 @@ class UserOrganisation extends Party {
   static mappedBy = [
     members:'memberOf'
   ]
+
+  public static final String restPath = "/userorgs"
 
   public String toString() {
     return displayName.toString()

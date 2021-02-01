@@ -1,4 +1,4 @@
-<g:set var="editable" value="${ d.isEditable() && ((d.curatoryGroups ? (request.curator != null && request.curator.size() > 0) : true) || (params.curationOverride == 'true')) }" />
+<g:set var="editable" value="${ d.isEditable() && ((d.curatoryGroups ? (request.curator != null && request.curator.size() > 0) : true) || (params.curationOverride == 'true' && request.user.isAdmin())) }" />
 <dl class="dl-horizontal">
   <dt>
     <g:annotatedLabel owner="${d}" property="name">Name</g:annotatedLabel>
@@ -39,20 +39,22 @@
   <ul id="tabs" class="nav nav-tabs">
     <li class="active"><a href="#platformdetails" data-toggle="tab">Platform Details</a></li>
     <g:if test="${d.id}">
-      <li><a href="#titledetails" data-toggle="tab">Hosted TIPPs <span class="badge badge-warning"> ${d.hostedTipps?.findAll{ it.status.value == 'Current'}?.size() ?: '0'}</span> </a></li>
+      <li><a href="#titledetails" data-toggle="tab">Hosted TIPPs</span> </a></li>
+      <li><a href="#packages" data-toggle="tab">Packages</a></li>
       <li><a href="#altnames" data-toggle="tab">Alternate Names <span class="badge badge-warning"> ${d.variantNames?.size() ?: '0'}</span> </a></li>
-      <g:if test="${grailsApplication.config.gokb.decisionSupport}">
+      <g:if test="${grailsApplication.config.gokb.decisionSupport?.active}">
         <li><a href="#ds" data-toggle="tab">Decision Support</a></li>
       </g:if>
-      <li><a href="#review" data-toggle="tab">Review Tasks <span
+      <li><a href="#review" data-toggle="tab">Review Tasks (Open/Total)<span
           class="badge badge-warning">
-            ${d.reviewRequests?.size() ?: '0'}
+            ${d.reviewRequests?.findAll { it.status == org.gokb.cred.RefdataCategory.lookup('ReviewRequest.Status','Open') }?.size() ?: '0'}/${d.reviewRequests.size()}
         </span></a></li>
     </g:if>
     <g:else>
       <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Hosted TIPPs </span></li>
+      <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Packages </span></li>
       <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Alternate Names </span></li>
-      <g:if test="${grailsApplication.config.gokb.decisionSupport}">
+      <g:if test="${grailsApplication.config.gokb.decisionSupport?.active}">
         <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Decision Support </span></li>
       </g:if>
       <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Review Tasks </span></li>
@@ -119,6 +121,19 @@
       <g:else>
         TIPPs can be added after the creation process has been finished.
       </g:else>
+    </div>
+
+    <div class="tab-pane" id="packages">
+      <dl>
+        <dt>
+          <g:annotatedLabel owner="${d}" property="packages">Packages</g:annotatedLabel>
+        </dt>
+        <dd>
+          <g:link class="display-inline" controller="search" action="index"
+            params="[qbe:'g:1packages', qp_platform_id:d.id, inline:true, refOid: d.getLogEntityId(), hide:['qp_platform', 'qp_platform_id']]"
+            id="">TIPPs on this Platform</g:link>
+        </dd>
+      </dl>
     </div>
 
     <g:render template="/tabTemplates/showVariantnames"

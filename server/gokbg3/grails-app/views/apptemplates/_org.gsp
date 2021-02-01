@@ -1,38 +1,47 @@
+<g:set var="editable" value="${ d.isEditable() && ((d.curatoryGroups ? (request.curator != null && request.curator.size() > 0) : true) || (params.curationOverride == 'true' && request.user.isAdmin())) }" />
 <dl class="dl-horizontal">
-      <dt>
-              <g:annotatedLabel owner="${d}" property="name">Name</g:annotatedLabel>
-      </dt>
-      <dd>
-              <g:xEditable class="ipe" owner="${d}" field="name" />
-      </dd>
-      <dt>
-              <g:annotatedLabel owner="${d}" property="status">Status</g:annotatedLabel>
-      </dt>
-      <dd>
-        <sec:ifAnyGranted roles="ROLE_SUPERUSER">
-          <g:xEditableRefData owner="${d}" field="status" config='KBComponent.Status' />
-        </sec:ifAnyGranted>
-        <sec:ifNotGranted roles="ROLE_SUPERUSER">
-          ${d.status?.value ?: 'Not Set'}
-        </sec:ifNotGranted>
-      </dd>
-      <dt>
-              <g:annotatedLabel owner="${d}" property="reference">Reference</g:annotatedLabel>
-      </dt>
-      <dd>
-              <g:xEditable class="ipe" owner="${d}" field="reference" />
-      </dd>
-      <dt>
-              <g:annotatedLabel owner="${d}" property="source">Source</g:annotatedLabel>
-      </dt>
-      <dd>
-              <g:manyToOneReferenceTypedown owner="${d}" field="source"
-                      baseClass="org.gokb.cred.Source">
-                      ${d.source?.name}
-              </g:manyToOneReferenceTypedown>
-      </dd>
+  <dt>
+          <g:annotatedLabel owner="${d}" property="name">Name</g:annotatedLabel>
+  </dt>
+  <dd>
+          <g:xEditable class="ipe" owner="${d}" field="name" />
+  </dd>
+  <dt>
+          <g:annotatedLabel owner="${d}" property="status">Status</g:annotatedLabel>
+  </dt>
+  <dd>
+    <sec:ifAnyGranted roles="ROLE_SUPERUSER">
+      <g:xEditableRefData owner="${d}" field="status" config='KBComponent.Status' />
+    </sec:ifAnyGranted>
+    <sec:ifNotGranted roles="ROLE_SUPERUSER">
+      ${d.status?.value ?: 'Not Set'}
+    </sec:ifNotGranted>
+  </dd>
+  <dt>
+          <g:annotatedLabel owner="${d}" property="reference">Reference</g:annotatedLabel>
+  </dt>
+  <dd>
+          <g:xEditable class="ipe" owner="${d}" field="reference" />
+  </dd>
+  <dt>
+    <g:annotatedLabel owner="${d}" property="source">Source</g:annotatedLabel>
+  </dt>
+  <dd>
+    <g:manyToOneReferenceTypedown owner="${d}" field="source" baseClass="org.gokb.cred.Source">${d.source?.name}</g:manyToOneReferenceTypedown>
+  </dd>
+  <dt>
+    <g:annotatedLabel owner="${d}" property="titleNamespace">Title Namespace</g:annotatedLabel>
+  </dt>
+  <dd>
+    <g:manyToOneReferenceTypedown owner="${d}" field="titleNamespace" baseClass="org.gokb.cred.IdentifierNamespace">${(d.titleNamespace?.name)?:d.titleNamespace?.value}</g:manyToOneReferenceTypedown>
+  </dd>
+  <dt>
+    <g:annotatedLabel owner="${d}" property="packageNamespace">Package Namespace</g:annotatedLabel>
+  </dt>
+  <dd>
+    <g:manyToOneReferenceTypedown owner="${d}" field="packageNamespace" baseClass="org.gokb.cred.IdentifierNamespace">${(d.packageNamespace?.name)?:d.packageNamespace?.value}</g:manyToOneReferenceTypedown>
+  </dd>
 </dl>
-
 <div id="content">
     <ul id="tabs" class="nav nav-tabs">
       <li class="active"><a href="#orgdetails" data-toggle="tab">Organization</a></li>
@@ -44,16 +53,24 @@
           </a>
         </li>
         <li>
-          <a href="#ids" data-toggle="tab">
-            IDs
-            <span class="badge badge-warning"> ${d.ids?.size() ?: '0'}</span>
-          </a>
+          <a href="#identifiers" data-toggle="tab">Identifiers <span class="badge badge-warning"> ${d.getCombosByPropertyNameAndStatus('ids','Active')?.size() ?: '0'} </span></a>
         </li>
         <li><a href="#relationships" data-toggle="tab">Relations</a></li>
-        <li><a href="#licenses" data-toggle="tab">Licenses</a></li>
-        <li><a href="#packages" data-toggle="tab">Packages</a></li>
-        <li><a href="#titles" data-toggle="tab">Published Titles</a></li>
-        <li><a href="#platforms" data-toggle="tab">Platforms</a></li>
+        <li>
+          <a href="#packages" data-toggle="tab">Packages
+            <span class="badge badge-warning"> ${d.getCombosByPropertyNameAndStatus('providedPackages','Active')?.size() ?: '0'}</span>
+          </a>
+        </li>
+        <li>
+          <a href="#titles" data-toggle="tab">Published Titles
+            <span class="badge badge-warning"> ${d.getCombosByPropertyNameAndStatus('publishedTitles','Active')?.size() ?: '0'}</span>
+          </a>
+        </li>
+        <li>
+          <a href="#platforms" data-toggle="tab">Platforms
+            <span class="badge badge-warning"> ${d.getCombosByPropertyNameAndStatus('providedPlatforms','Active')?.size() ?: '0'}</span>
+          </a>
+        </li>
         <li>
           <a href="#addprops" data-toggle="tab">
             Custom Fields
@@ -62,8 +79,8 @@
         </li>
         <li>
           <a href="#review" data-toggle="tab">
-            Review Tasks
-            <span class="badge badge-warning"> ${d.reviewRequests?.size() ?: '0'}</span>
+            Review Tasks (Open/Total)
+            <span class="badge badge-warning"> ${d.reviewRequests?.findAll { it.status == org.gokb.cred.RefdataCategory.lookup('ReviewRequest.Status','Open') }?.size() ?: '0'}/${d.reviewRequests.size()} </span>
           </a>
         </li>
         <li>
@@ -77,7 +94,6 @@
         <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Alternate Names </span></li>
         <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">IDs </span></li>
         <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Relations </span></li>
-        <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Licenses </span></li>
         <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Packages </span></li>
         <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Published Titles </span></li>
         <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Platforms </span></li>
@@ -133,7 +149,7 @@
 
         <g:render template="/tabTemplates/showVariantnames" model="${[d:d, showActions:true]}" />
 
-        <div class="tab-pane" id="ids">
+        <div class="tab-pane" id="identifiers">
           <dl>
             <dt>
               <g:annotatedLabel owner="${d}" property="ids">Identifiers</g:annotatedLabel>
@@ -143,7 +159,7 @@
                 model="${[d:d, property:'ids', fragment:'identifiers', cols:[
                           [expr:'toComponent.namespace.value', colhead:'Namespace'],
                           [expr:'toComponent.value', colhead:'ID', action:'link']]]}" />
-              <g:if test="${d.isEditable()}">
+              <g:if test="${editable}">
                 <h4>
                   <g:annotatedLabel owner="${d}" property="addIdentifier">Add new Identifier</g:annotatedLabel>
                 </h4>
@@ -262,7 +278,7 @@
             </dt>
             <dd>
               <g:render template="/apptemplates/comboList"
-                      model="${[d:d, property:'offices', noadd:true, cols:[[expr:'name',colhead:'Office Name', action:'link']],targetClass:'org.gokb.cred.Office',direction:'in']}" />
+                      model="${[d:d, property:'offices', noadd:true, cols:[[expr:'name',colhead:'Office Name', action:'link']],targetClass:'org.gokb.cred.Office',direction:'in',propagateDelete: 'true']}" />
 
               <g:if test="${d.isEditable()}">
                 <g:if test="${d.id}">
@@ -308,6 +324,12 @@
                       <dt class="dt-label">Region</dt>
                       <dd>
                         <input class="form-control" type="text" name="region" />
+                      </dd>
+                      <dt class="dt-label">Country</dt>
+                      <dd>
+                        <g:simpleReferenceTypedown class="form-control" name="country"
+                          baseClass="org.gokb.cred.RefdataValue"
+                          filter1="Country" />
                       </dd>
                       <dt class="dt-label"></dt>
                       <dd>

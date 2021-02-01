@@ -7,9 +7,12 @@ import GOKbSyncBase
 while ( moredata ) {
   
   def resources = []
-  fetchFromSource (path: '/gokb/oai/platforms') { resp, body ->
+  fetchFromSource (path: "${sourceContext}/oai/platforms") { resp, body ->
 
-    body?.'ListRecords'?.'record'.metadata.gokb.platform.eachWithIndex { data, index ->
+    body?.'ListRecords'?.'record'.eachWithIndex { rec, index ->
+
+      def data = rec.metadata.gokb.platform
+      def directFields = ['authentication', 'software', 'service']
 
       println("Record ${index + 1}")
 
@@ -17,18 +20,31 @@ while ( moredata ) {
       
       resourceFieldMap['platformName'] = cleanText(data.name.text())
       resourceFieldMap['platformUrl'] = cleanText(data.primaryUrl.text())
+
+      if (data.provider?.name) {
+        resourceFieldMap['provider'] = addCoreItems ( data.provider )
+      }
+      else {
+        directFields.add('provider')
+      }
       
-      
-      directAddFields (data, ['authentication', 'software', 'service', 'provider'], resourceFieldMap)
+      directAddFields (data, directFields, resourceFieldMap)
       
       resources.add(resourceFieldMap)
+
+      config.lastTimestamp = rec.header.datestamp.text()
     }
   }
   
   resources.each {
-    sendToTarget (path: '/gokb/integration/crossReferencePlatform', body: it)
+    sendToTarget (path: "${targetContext}/integration/crossReferencePlatform", body: it)
   }
   
   // Save the config.
   saveConfig()
 }
+
+setLastRun ()
+saveConfig ()
+
+println("Total: ${total}, Errors: ${errors}")

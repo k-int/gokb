@@ -121,7 +121,7 @@
 
     <g:if test="${d.id}">
       <li><a href="#altnames" data-toggle="tab">Alternate Names <span class="badge badge-warning"> ${d.variantNames?.size() ?: '0'}</span> </a></li>
-      <li><a href="#identifiers" data-toggle="tab">Identifiers <span class="badge badge-warning"> ${d.ids?.size() ?: '0'} </span></a></li>
+      <li><a href="#identifiers" data-toggle="tab">Identifiers <span class="badge badge-warning"> ${d?.getCombosByPropertyNameAndStatus('ids','Active')?.size() ?: '0'} </span></a></li>
       <li><a href="#publishers" data-toggle="tab">Publishers <span
           class="badge badge-warning">
             ${d.publisher?.size() ?: '0'}
@@ -138,11 +138,12 @@
         class="badge badge-warning">
           ${d.additionalProperties?.size() ?: '0'}
       </span></a></li>
-      <li><a href="#review" data-toggle="tab">Review Tasks <span
-          class="badge badge-warning">
-            ${d.reviewRequests?.size() ?: '0'}
-        </span></a></li>
-      <g:if test="${grailsApplication.config.gokb.decisionSupport}" >
+      <li><a href="#review" data-toggle="tab">Review Tasks (Open/Total)
+        <span class="badge badge-warning"> 
+          ${d.reviewRequests?.findAll { it.status == org.gokb.cred.RefdataCategory.lookup('ReviewRequest.Status','Open') }?.size() ?: '0'}/${d.reviewRequests.size()}
+        </span>
+      </a></li>
+      <g:if test="${grailsApplication.config.gokb.decisionSupport?.active}" >
         <li><a href="#ds" data-toggle="tab">Decision Support</a></li>
       </g:if>
       <g:if test="${grailsApplication.config.gokb.handleSubjects}" >
@@ -157,7 +158,7 @@
       <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Platforms </span></li>
       <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Custom Fields </span></li>
       <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Review Tasks </span></li>
-      <g:if test="${grailsApplication.config.gokb.decisionSupport}" >
+      <g:if test="${grailsApplication.config.gokb.decisionSupport?.active}" >
         <li class="disabled" title="${message(code:'component.create.idMissing.label')}"><span class="nav-tab-disabled">Decision Support </span></li>
       </g:if>
       <g:if test="${grailsApplication.config.gokb.handleSubjects}" >
@@ -291,7 +292,7 @@
             <h4>
               <g:annotatedLabel owner="${d}" property="addIdentifier">Add new Identifier</g:annotatedLabel>
             </h4>
-            <g:render template="/apptemplates/addIdentifier" model="${[d:d, hash:'#identifiers']}"/>
+            <g:render template="/apptemplates/addIdentifier" model="${[d:d, hash:'#identifiers', targetType:'book']}"/>
           </g:if>
         </dd>
       </dl>

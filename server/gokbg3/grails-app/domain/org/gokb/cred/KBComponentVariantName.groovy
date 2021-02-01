@@ -28,13 +28,23 @@ class KBComponentVariantName {
         normVariantName  (nullable:true, blank:true, maxSize:2048)
         variantType (nullable:true, blank:false)
         locale (nullable:true, blank:false)
-        owner (nullable:false, blank:false)
         status (nullable:true, blank:false)
   }
 
   String getLogEntityId() {
       "${this.class.name}:${id}"
   }
+
+  static belongsTo = [owner: KBComponent]
+
+  static jsonMapping = [
+    'ignore': [
+      'status',
+      'normVariantName',
+      'status',
+      'owner'
+    ]
+  ]
 
   def beforeInsert() {
     // Generate the any necessary values.

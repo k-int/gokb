@@ -1,29 +1,20 @@
 package org.gokb
 
 import com.k_int.ConcurrencyManagerService
-import com.k_int.ConcurrencyManagerService.Job
 import com.k_int.ExtendedHibernateDetachedCriteria
-import com.k_int.TextUtils
 import com.k_int.TsvSuperlifterService
 import grails.converters.JSON
 import grails.util.GrailsNameUtils
-import grails.util.Holders
 import groovy.util.logging.*
-import org.elasticsearch.action.search.*
-import org.elasticsearch.index.query.*
-import org.elasticsearch.search.sort.*
 import org.gokb.cred.*
-import org.gokb.refine.RefineOperation
 import org.gokb.refine.RefineProject
 import org.hibernate.criterion.CriteriaSpecification
 import org.hibernate.criterion.Subqueries
 import org.springframework.security.access.annotation.Secured
 import org.springframework.web.multipart.MultipartHttpServletRequest
-import org.apache.lucene.search.join.ScoreMode
 
 import java.security.SecureRandom
 
-import static java.util.UUID.randomUUID
 /**
  * TODO: Change methods to abide by the RESTful API, and implement GET, POST, PUT and DELETE with proper response codes.
  *
@@ -36,6 +27,7 @@ class ApiController {
   SecureRandom rand = new SecureRandom()
   UploadAnalysisService uploadAnalysisService
   def ESWrapperService
+  def ESSearchService
 
   static def reversemap = ['subject':'subjectKw','componentType':'componentType','identifier':'identifiers.value']
   static def non_analyzed_fields = ['componentType','identifiers.value']
@@ -44,6 +36,7 @@ class ApiController {
     [
       "id"      : "${u.id}",
       "email"     : "${u.email}",
+      "username"    : "${u.username}",
       "displayName"   : "${u.displayName ?: u.username}"
     ]
   }
@@ -189,7 +182,24 @@ class ApiController {
     }
 
     all_ns.each { ns ->
-      result.add([value: ns.value, category: ns.family ?: ""])
+      result.add([value: ns.value, namespaceName:ns.name, category: ns.family ?: ""])
+    }
+
+    apiReturn(result)
+  }
+
+  def groups() {
+
+    def result = []
+
+    CuratoryGroup.list().each {
+      result << [
+        'id':  it.id,
+        'name': it.name,
+        'editStatus': it.editStatus?.value ?: null,
+        'status': it.status?.value ?: null,
+        'uuid': it.uuid
+      ]
     }
 
     apiReturn(result)
@@ -260,7 +270,7 @@ class ApiController {
   // this is used as an entrypoint for single page apps based on frameworks like angular.
   @Secured(['ROLE_USER', 'IS_AUTHENTICATED_FULLY'])
   def search() {
-    def result = [:]
+    def result = [result: 'OK']
 
     User user = springSecurityService.currentUser
 
@@ -275,25 +285,39 @@ class ApiController {
 
         // Looked up a template from somewhere, see if we can execute a search
         if ( result.qbetemplate ) {
-          log.debug("Execute query");
-          def qresult = [max:result.max, offset:result.offset]
-          result.rows = doQuery(result.qbetemplate, params, qresult)
-          log.debug("Query complete");
-          result.lasthit = result.offset + result.max > qresult.reccount ? qresult.reccount : ( result.offset + result.max )
 
-          // Add the page information.
-          result.page_current = (result.offset / result.max) + 1
-          result.page_total = (qresult.reccount / result.max).toInteger() + (qresult.reccount % result.max > 0 ? 1 : 0)
+          Class target_class = Class.forName(result.qbetemplate.baseclass);
+          def read_perm = target_class?.isTypeReadable()
+
+          if (read_perm) {
+            log.debug("Execute query");
+            def qresult = [max:result.max, offset:result.offset]
+            result.rows = doQuery(result.qbetemplate, params, qresult)
+            log.debug("Query complete");
+            result.lasthit = result.offset + result.max > qresult.reccount ? qresult.reccount : ( result.offset + result.max )
+
+            // Add the page information.
+            result.page_current = (result.offset / result.max) + 1
+            result.page_total = (qresult.reccount / result.max).toInteger() + (qresult.reccount % result.max > 0 ? 1 : 0)
+          }
+          else {
+            result.result = 'ERROR'
+            result.code = 403
+            response.setStatus(403)
+            result.message = "Insufficient permissions to view this resource."
+
+            log.debug("No permission to view this resource!")
+          }
         }
         else {
-          log.error("no template ${result?.qbetemplate}");
+          log.debug("no template ${result?.qbetemplate}");
         }
     }
     else {
       log.debug("No request json");
     }
 
-    render result as JSON
+    apiReturn(result)
   }
 
   /**
@@ -310,572 +334,81 @@ class ApiController {
 
   def suggest() {
     def result = [:]
-    def esclient = ESWrapperService.getClient()
-    def acceptedStatus = []
-    def component_type = null
-    def errors = [:]
-    def offsetDefault = 0
-    def maxDefault = 10
+    def searchParams = params
 
     try {
 
-      if ( params.q?.size() > 0 ) {
+      if ( params.q?.length() > 0 ) {
+        searchParams.suggest = params.q
+        searchParams.remove("q")
 
-        QueryBuilder suggestQuery = QueryBuilders.boolQuery()
-
-        suggestQuery.must(QueryBuilders.matchQuery('suggest', params.q))
-
-        if ( params.componentType ) {
-          component_type = deriveComponentType(params.componentType)
-
-          if(component_type) {
-
-            if (component_type == "TitleInstance") {
-              QueryBuilder typeQuery = QueryBuilders.boolQuery()
-
-              typeQuery.should(QueryBuilders.matchQuery('componentType', "JournalInstance"))
-              typeQuery.should(QueryBuilders.matchQuery('componentType', "DatabaseInstance"))
-              typeQuery.should(QueryBuilders.matchQuery('componentType', "BookInstance"))
-
-              typeQuery.minimumNumberShouldMatch(1)
-
-              exactQuery.must(typeQuery)
-            }
-            else {
-              suggestQuery.must(QueryBuilders.matchQuery('componentType', component_type))
-            }
-
-            if( component_type == 'Org' && params.role ) {
-              suggestQuery.must(QueryBuilders.matchQuery('roles', params.role))
-            }
-          }
-          else {
-            errors['componentType'] = "Requested component type ${v} does not exist"
-          }
+        if (!searchParams.mapRecords) {
+          searchParams.skipDomainMapping = true
         }
-
-        if ( params.status ) {
-          acceptedStatus = params.list('status')
-        }
-
-        if ( acceptedStatus.size() > 0 ) {
-
-          QueryBuilder statusQuery = QueryBuilders.boolQuery()
-
-          acceptedStatus.each {
-            statusQuery.should(QueryBuilders.matchQuery('status', it))
-          }
-
-          statusQuery.minimumNumberShouldMatch(1)
-
-          suggestQuery.must(statusQuery)
-        }
-
         else {
-          suggestQuery.must(QueryBuilders.matchQuery('status', 'Current'))
+          searchParams.remove("mapRecords")
         }
 
-        SearchRequestBuilder es_request =  esclient.prepareSearch("suggest")
-
-        es_request.setIndices(grailsApplication.config.globalSearch.indices)
-        es_request.setTypes(grailsApplication.config.globalSearch.types)
-        es_request.setQuery(suggestQuery)
-
-        setQueryMax(errors, result, 10)
-        setQueryFrom(errors, result, 0)
-        setQueryOffset(errors, result, 0)
-        if (result.offset != offsetDefault){
-          es_request.setFrom(result.offset)
-        }
-        if (result.max != maxDefault){
-          es_request.setSize(result.max)
-        }
-
-        def search = es_request.execute().actionGet()
-
-        if (search.hits.maxScore == Float.NaN) { //we cannot parse NaN to json so set to zero...
-          search.hits.maxScore = 0
-        }
-
-        result.count = search.hits.totalHits
-        result.records = []
-
-        search.hits.each { r ->
-          def response_record = [:]
-          response_record.id = r.id
-          response_record.score = r.score
-
-          r.source.each { field, val ->
-            response_record."${field}" = val
-          }
-
-          result.records.add(response_record)
-        }
-
+        result = ESSearchService.find(searchParams)
       }
       else{
-        errors['fatal'] = "No query parameter 'q=' provided"
+        result.errors = ['fatal': "No query parameter 'q=' provided"]
+        result.result = "ERROR"
       }
 
     }finally {
-      if (errors) {
-        response.status = 400
-        result = [:]
-        result.errors = errors
+      if (result.errors) {
+        response.setStatus(400)
       }
     }
 
     render result as JSON
-  }
-
-  /*
-   * Alternate method to setQueryFrom, reading from params.offset instead of from params.from
-   */
-  private void setQueryOffset(LinkedHashMap errors, LinkedHashMap result, def defaultValue) {
-    setQueryParameterAsInt('offset', 'offset', defaultValue, errors, result)
-  }
-
-  /*
-   * Alternate method to setQueryOffset, reading from params.from instead of from params.offset
-   */
-  private void setQueryFrom(LinkedHashMap errors, LinkedHashMap result, def defaultValue) {
-    setQueryParameterAsInt('from', 'offset', defaultValue, errors, result)
-  }
-
-  private void setQueryMax(LinkedHashMap errors, LinkedHashMap result, def defaultValue) {
-    setQueryParameterAsInt('max', 'max', defaultValue, errors, result)
-  }
-
-  private void setQueryParameterAsInt(def param, def resultField, def defaultValue,
-                                      LinkedHashMap errors, LinkedHashMap result){
-    Integer value = convertToInt(param, errors)
-    if (value != null) {
-      result."$resultField" = value
-    }
-    else if (defaultValue != null) {
-      result."$resultField" = defaultValue
-    }
-  }
-
-  private Integer convertToInt(def param, LinkedHashMap errors){
-    if (params."$param") {
-      def value = null
-      try {
-        value = params."$param" as Integer
-        return value
-      } catch (all) {
-        errors."$param" = "Could not convert ${params."$param"} to Int."
-      }
-    }
-    return null
   }
 
   /**
-   * find : Query the Elasticsearch index
-   * @param max : Define result size
-   * @param offset : Define offset
-   * @param from : Define offset
-   * @param label : Search in name + variantNames
-   * @param name : Search in name
-   * @param altname : Search in variantNames
-   * @param id : Search by object ID ([classname]:[id])
-   * @param uuid : Search by component UUID
-   * @param identifier : Search for a linked external identifier ([identifier] or [namespace],[identifier])
-   * @param componentType : Filter by component Type (Package, Org, Platform, BookInstance, JournalInstance, TIPP)
-   * @param role : Filter by Org role (only in context of componentType=Org)
-   * @param linkedPackage : Filter by linked Package (only in context of componentType=TIPP)
-   * @param listStatus : Filter by title list status (only in context of componentType=Package)
-   * @param status : Filter by component status (Current, Expected, Retired, Deleted)
-   * @param linkedTitle : Filter by linked TitleInstance (only in context of componentType=TIPP)
-   * @param curatoryGroup : Filter by connected Curatory Group
+   * find : Query the Elasticsearch index via ESSearchService
   **/
-
   def find() {
     def result = [:]
-    def esclient = ESWrapperService.getClient()
-    def search_action = null
-    def errors = [:]
-
-
-    try {
-
-      QueryBuilder exactQuery = QueryBuilders.boolQuery()
-
-      def singleParams = [:]
-      def linkedFieldParams = [:]
-      def unknown_fields = []
-      def other_fields = ["controller","action","max","offset","from"]
-      def id_params = [:]
-      def orgRoleParam = ""
-      def providerParam = ""
-      def hostPlatformId = null
-      def nominalPlatformId = null
-      def genericPlatformId = null
-      def pkgListStatus = ""
-      def pkgNameSort = false
-      def acceptedStatus = []
-      def component_type = null
-
-      params.each { k, v ->
-        if ( k == 'componentType' && v instanceof String ) {
-
-          component_type = deriveComponentType(v)
-
-          if(!component_type) {
-            errors['componentType'] = "Requested component type ${v} does not exist"
-          }
-        }
-
-        else if (params.componentType == 'Package' && k == 'sort' && v == 'name') {
-          pkgNameSort = true
-        }
-
-        else if (k == 'role' && v instanceof String ) {
-          orgRoleParam = v
-        }
-
-        else if ( (k == 'publisher' || k == 'currentPublisher') && v instanceof String) {
-          linkedFieldParams['publisher'] = v
-        }
-
-        else if ( k == 'cpname' && v instanceof String) {
-          singleParams['cpname'] = v
-        }
-
-        else if ( k == 'provider' && v instanceof String) {
-          linkedFieldParams['provider'] = v
-        }
-
-        else if ( (k == 'linkedPackage' || k == 'tippPackage') && v instanceof String) {
-          linkedFieldParams['tippPackage'] = v
-        }
-
-        else if (k == 'hostPlatform' && v instanceof String) {
-          hostPlatformId = v
-        }
-
-        else if (k == 'nominalPlatform' && v instanceof String) {
-          nominalPlatformId = v
-        }
-
-        else if (k == 'platform' && v instanceof String) {
-          genericPlatformId = v
-        }
-
-        else if (k == 'listStatus' && v instanceof String) {
-          pkgListStatus = v
-        }
-
-        else if (k == 'status') {
-          acceptedStatus = params.list(k)
-        }
-
-        else if ( (k == 'linkedTitle' || k == 'tippTitle') && v instanceof String) {
-          linkedFieldParams['tippTitle'] = v
-        }
-
-        else if (k == 'curatoryGroup' && v instanceof String) {
-          singleParams['curatoryGroups'] = v
-        }
-
-        else if ((k == 'label' || k == "q") && v instanceof String) {
-
-          QueryBuilder labelQuery = QueryBuilders.boolQuery()
-
-          labelQuery.should(QueryBuilders.matchQuery('name', v))
-          labelQuery.should(QueryBuilders.matchQuery('altname', v))
-          labelQuery.minimumNumberShouldMatch(1)
-
-          exactQuery.must(labelQuery)
-        }
-
-        else if (!params.label && k == "name" && v instanceof String) {
-          singleParams['name'] = v
-        }
-
-        else if (!params.label && k == "altname" && v instanceof String) {
-          singleParams['altname'] = v
-        }
-
-        else if ( k == "identifier" && v instanceof String) {
-          if (v.contains(',')) {
-            id_params['identifiers.namespace'] = v.split(',')[0]
-            id_params['identifiers.value'] = v.split(',')[1]
-          }else{
-            id_params['identifiers.value'] = v
-          }
-        }
-
-        else if ( k == "id" && v instanceof String) {
-          singleParams['_id'] = v
-        }
-
-        else if ( k == "uuid" && v instanceof String ) {
-          singleParams['uuid'] = v
-        }
-
-        else if (!other_fields.contains(k)){
-          unknown_fields.add(k)
-        }
-      }
-
-      if(unknown_fields.size() > 0){
-        errors['unknown_params'] = unknown_fields
-      }
-
-      if ( pkgListStatus ) {
-        if ( component_type && component_type == 'Package' ) {
-          singleParams['listStatus'] = pkgListStatus
-        }
-        else {
-          errors['listStatus'] = "To filter by Package List Status, please add filter componentType=Package to the query"
-        }
-      }
-
-      if ( acceptedStatus.size() > 0 ) {
-
-        QueryBuilder statusQuery = QueryBuilders.boolQuery()
-
-        acceptedStatus.each {
-          statusQuery.should(QueryBuilders.termQuery('status', it))
-        }
-
-        statusQuery.minimumNumberShouldMatch(1)
-
-        exactQuery.must(statusQuery)
-      }
-
-      else {
-        exactQuery.must(QueryBuilders.termQuery('status', 'Current'))
-      }
-
-      linkedFieldParams.each { k, v ->
-        QueryBuilder linkedFieldQuery = QueryBuilders.boolQuery()
-
-        linkedFieldQuery.should(QueryBuilders.termQuery(k, v))
-        linkedFieldQuery.should(QueryBuilders.termQuery("${k}Uuid".toString(), v))
-        linkedFieldQuery.minimumNumberShouldMatch(1)
-
-        exactQuery.must(linkedFieldQuery)
-      }
-
-      if ( orgRoleParam ) {
-        if ( component_type && component_type == 'Org') {
-          singleParams['roles'] = orgRoleParam
-        }
-        else {
-          errors['role'] = "To filter by Org Roles, please add filter componentType=Org to the query"
-        }
-      }
-
-      if ( hostPlatformId ) {
-        if ( component_type && component_type == 'TitleInstancePackagePlatform' ) {
-          QueryBuilder linkedFieldQuery = QueryBuilders.boolQuery()
-
-          linkedFieldQuery.should(QueryBuilders.termQuery('hostPlatform', hostPlatformId))
-          linkedFieldQuery.should(QueryBuilders.termQuery('hostPlatformUuid', hostPlatformId))
-          linkedFieldQuery.minimumNumberShouldMatch(1)
-
-          exactQuery.must(linkedFieldQuery)
-        }
-        else {
-          errors['hostPlatform'] = "To filter by Host Platform, please add filter componentType=TIPP to the query"
-        }
-      }
-
-      if ( nominalPlatformId ) {
-        if ( component_type && component_type == 'Package' ) {
-          QueryBuilder linkedFieldQuery = QueryBuilders.boolQuery()
-
-          linkedFieldQuery.should(QueryBuilders.termQuery('nominalPlatform', nominalPlatformId))
-          linkedFieldQuery.should(QueryBuilders.termQuery('platformUuid', nominalPlatformId))
-          linkedFieldQuery.minimumNumberShouldMatch(1)
-
-          exactQuery.must(linkedFieldQuery)
-        }
-        else {
-          errors['nominalPlatform'] = "To filter by Package Platform, please add filter componentType=Package to the query"
-        }
-      }
-
-      if ( genericPlatformId ) {
-        if ( component_type ) {
-
-          if( component_type == 'TitleInstancePackagePlatform' ) {
-            QueryBuilder linkedFieldQuery = QueryBuilders.boolQuery()
-
-            linkedFieldQuery.should(QueryBuilders.termQuery('hostPlatform', genericPlatformId))
-            linkedFieldQuery.should(QueryBuilders.termQuery('hostPlatformUuid', genericPlatformId))
-            linkedFieldQuery.minimumNumberShouldMatch(1)
-
-            exactQuery.must(linkedFieldQuery)
-          }
-
-          else if ( component_type == 'Package' ) {
-            QueryBuilder linkedFieldQuery = QueryBuilders.boolQuery()
-
-            linkedFieldQuery.should(QueryBuilders.termQuery('nominalPlatform', genericPlatformId))
-            linkedFieldQuery.should(QueryBuilders.termQuery('platformUuid', genericPlatformId))
-            linkedFieldQuery.minimumNumberShouldMatch(1)
-
-            exactQuery.must(linkedFieldQuery)
-          }
-
-          else {
-            errors['platform'] = "No platform context available for component type ${component_type}"
-          }
-        }
-        else {
-          errors['platform'] = "To filter by Platform, please add filter componentType=TIPP to the query"
-        }
-      }
-
-      if (component_type == "TitleInstance") {
-        QueryBuilder typeQuery = QueryBuilders.boolQuery()
-
-        typeQuery.should(QueryBuilders.matchQuery('componentType', "JournalInstance"))
-        typeQuery.should(QueryBuilders.matchQuery('componentType', "DatabaseInstance"))
-        typeQuery.should(QueryBuilders.matchQuery('componentType', "BookInstance"))
-
-        typeQuery.minimumNumberShouldMatch(1)
-
-        exactQuery.must(typeQuery)
-      }
-      else if (component_type) {
-        singleParams['componentType'] = component_type
-      }
-
-      if (singleParams) {
-        singleParams.each { k,v ->
-          exactQuery.must(QueryBuilders.matchQuery(k,v))
-        }
-      }
-
-      if (id_params) {
-        exactQuery.must(QueryBuilders.nestedQuery("identifiers", addIdQueries(id_params), ScoreMode.None))
-      }
-
-      if( !errors && (singleParams || params.label || id_params || component_type) ) {
-        SearchRequestBuilder es_request =  esclient.prepareSearch("exact")
-
-        es_request.setIndices(grailsApplication.config.globalSearch.indices)
-        es_request.setTypes(grailsApplication.config.globalSearch.types)
-        es_request.setQuery(exactQuery)
-
-        setQueryMax(errors, result, null)
-        setQueryFrom(errors, result, null)
-        setQueryOffset(errors, result, null)
-
-        if (result.max) {
-          es_request.setSize(result.max)
-        }
-        if (result.offset) {
-          es_request.setFrom(result.offset)
-        }
-
-        if (pkgNameSort) {
-          FieldSortBuilder pkgSort = new FieldSortBuilder('sortname')
-          es_request.addSort(pkgSort)
-        }
-
-        search_action = es_request.execute()
-      }
-      else if ( !singleParams && !component_type && !params.label && !id_params){
-        errors['params'] = "No valid parameters found"
-      }
-
-      def search = null
-
-      if (search_action) {
-        search = search_action.actionGet()
-
-
-        if(search.hits.maxScore == Float.NaN) { //we cannot parse NaN to json so set to zero...
-          search.hits.maxScore = 0;
-        }
-
-        result.count = search.hits.totalHits
-        result.records = []
-
-        search.hits.each { r ->
-          def response_record = [:]
-          response_record.id = r.id
-
-          if (response_record.score && response_record.score != Float.NaN) {
-            response_record.score = r.score
-          }
-
-          r.source.each { field, val ->
-            response_record."${field}" = val
-          }
-
-          result.records.add(response_record);
-        }
-      }
-
-    }finally {
-      if (errors) {
-        result = [:]
-        response.status = 400
-        result.errors = errors
-      }
+    def searchParams = params
+
+    if (!searchParams.mapRecords) {
+      searchParams.skipDomainMapping = true
+    }
+    else {
+      searchParams.remove("mapRecords")
     }
 
+    try {
+      result = ESSearchService.find(searchParams)
+    }
+    finally {
+      if (result.errors) {
+        response.setStatus(400)
+      }
+    }
     render result as JSON
   }
 
-  private def deriveComponentType(String typeString) {
-    def result = null
-    def defined_types = [
-      "Package",
-      "Org",
-      "JournalInstance",
-      "Journal",
-      "BookInstance",
-      "Book",
-      "DatabaseInstance",
-      "Database",
-      "Platform",
-      "TitleInstancePackagePlatform",
-      "TIPP",
-      "TitleInstance",
-      "Title"
-    ]
-    def final_type = typeString.capitalize()
 
-    if(final_type in defined_types) {
-
-      if(final_type== 'TIPP') {
-        final_type = 'TitleInstancePackagePlatform'
-      }
-      else if (final_type == 'Book') {
-        final_type = 'BookInstance'
-      }
-      else if (final_type == 'Journal') {
-        final_type = 'JournalInstance'
-      }
-      else if (final_type == 'Database') {
-        final_type = 'DatabaseInstance'
-      }
-      else if (final_type == 'Title') {
-        final_type = 'TitleInstance'
-      }
-
-      result = final_type
+  /**
+    * scroll : Deliver huge amounts of Elasticsearch data
+    **/
+  def scroll() {
+    def result = [:]
+    try {
+      result = ESSearchService.scroll(params)
     }
-    result
+    catch(Exception e){
+      result.result = "ERROR"
+      result.message = e.message
+      result.cause = e.cause
+      log.error("Could not process scroll request. Exception was: ${e.message}")
+      response.setStatus(400)
+    }
+    render result as JSON
   }
 
-  private def addIdQueries(params) {
-
-    QueryBuilder idQuery = QueryBuilders.boolQuery()
-
-    params.each { k,v ->
-      idQuery.must(QueryBuilders.termQuery(k, v))
-    }
-
-    return idQuery
-  }
 
   private def buildQuery(params) {
 
@@ -942,7 +475,7 @@ class ApiController {
   /**
    * show : Returns a simplified JSON serialization of a domain class object
    * @param oid : The OID ("<FullyQualifiedClassName>:<PrimaryKey>") of the object
-   * @param withCombos : Also return combo properties for KBComponents
+   * @param withCombos : Also return all combos directly linked to the object
   **/
 
   def show() {
@@ -950,7 +483,7 @@ class ApiController {
     if (params.oid || params.id) {
       def obj = genericOIDService.resolveOID(params.oid ?: params.id)
 
-      if ( obj?.isReadable() ) {
+      if ( obj?.isReadable() || (obj?.class?.simpleName == 'User' && obj?.equals(springSecurityService.currentUser)) ) {
 
         if(obj.class in KBComponent) {
 
@@ -960,7 +493,13 @@ class ApiController {
         }
         else if (obj.class.name == 'org.gokb.cred.User'){
 
-          result.resource = ['id': obj.id, 'username': obj.username, 'displayName': obj.displayName, 'curatoryGroups': obj.curatoryGroups]
+          def cur_groups = []
+
+          obj.curatoryGroups?.each { cg ->
+            cur_groups.add([name: cg.name, id: cg.id])
+          }
+
+          result.resource = ['id': obj.id, 'username': obj.username, 'displayName': obj.displayName, 'curatoryGroups': cur_groups]
         }
         else {
           result.resource = obj
@@ -968,15 +507,21 @@ class ApiController {
       }
       else if (!obj) {
         result.error = "Object ID could not be resolved!"
+        response.setStatus(404)
+        result.code = 404
         result.result = 'ERROR'
       }
       else {
         result.error = "Access to object was denied!"
+        response.setStatus(403)
+        result.code = 403
         result.result = 'ERROR'
       }
     }
     else {
       result.result = 'ERROR'
+      response.setStatus(400)
+      result.code = 400
       result.error = 'No object id supplied!'
     }
 
@@ -998,7 +543,40 @@ class ApiController {
       response_row['__oid'] = rec.class.name+':'+rec.id
       response_row['__seq'] = seq++
       qbetemplate.qbeConfig.qbeResults.each { r ->
-        response_row[r.heading] = groovy.util.Eval.x(rec, 'x.' + r.property)
+        def ppath = r.property.split(/\./)
+        def cobj = rec
+        def final_oid = "${cobj.class.name}:${cobj.id}"
+
+        ppath.eachWithIndex { prop, idx ->
+          def sp = prop.minus('?')
+
+          if( cobj?.class?.name == 'org.gokb.cred.RefdataValue' ) {
+            cobj = cobj.value
+          }
+          else {
+            if ( cobj && KBComponent.has(cobj, sp)) {
+              if (sp == 'password' || sp == 'email') {
+                cobj = null
+              }
+              else {
+                cobj = cobj[sp]
+              }
+
+              if (ppath.size() > 1 && idx == ppath.size()-2) {
+                if (cobj && sp != 'class') {
+                  final_oid = "${cobj.class.name}:${cobj.id}"
+                }
+                else {
+                  final_oid = null
+                }
+              }
+            }
+            else {
+              cobj = null
+            }
+          }
+        }
+        response_row["${r.property}"] = [heading: r.heading, link: (r.link ? (final_oid ?: response_row.__oid ) : null), value: (cobj ?: '-Empty-')]
       }
       resultrows.add(response_row);
     }

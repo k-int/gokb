@@ -9,6 +9,7 @@
     <meta name="description" content="">
     <meta name="author" content="">
     <link rel="shortcut icon" href="${resource(dir: 'images', file: 'favicon.ico')}" type="image/x-icon">
+    <asset:script> var contextPath="${grailsApplication.config.server.contextPath ?: '/'}"; </asset:script>
     <g:layoutHead />
 
     <asset:stylesheet src="gokb/themes/${ grailsApplication.config.gokb.theme }/theme.css"/>
@@ -41,16 +42,25 @@
            <span class="icon-bar"></span>
          </button>
          <!-- navbar-brand is hidden on larger screens, but visible when the menu is collapsed -->
-         <a class="navbar-brand" href="public" style="font-weight:bold;"><g:message code="gokb.appname" default="GOKb" /></a>
+         <a class="navbar-brand" href="${grailsApplication.config.server.contextPath ?: ''}/" style="font-weight:bold;">
+          <g:message code="gokb.appname" default="GOKb" />
+          <g:if test="${grailsApplication.config.gokb.instance?.description}">
+            – ${grailsApplication.config.gokb.instance?.description}
+          </g:if>
+         </a>
        </div>
 
        <div class="nav navbar-nav navbar-right">
           <g:if test="${grailsApplication.config.gokb.blogUrl}">
             <li><a  style="font-weight:bold;" href ="${grailsApplication.config.gokb.blogUrl}">About GOKb</a></li>
           </g:if>
+          <li><a href="https://github.com/openlibraryenvironment/gokb/wiki/API"  style="font-weight:bold;">API Documentation</a></li>
           <li><span style="width:15px"></span></li>
           <li><g:link controller="register" action="register" style="font-weight:bold;">Register</g:link></li>
-          <li><g:link controller="home" action="index" style="font-weight:bold;">Admin Home</g:link></li>
+          <li><g:link controller="home" action="index" style="font-weight:bold;">Legacy UI</g:link></li>
+          <g:if test="${grailsApplication.config.gokb.uiUrl}">
+            <li><a style="font-weight:bold;" href ="${grailsApplication.config.gokb.uiUrl}">GOKb Client</a></li>
+          </g:if>
        </div>
 
      </div>

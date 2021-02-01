@@ -2,6 +2,10 @@ package org.gokb
 
 import java.text.Normalizer
 import java.security.MessageDigest
+import java.time.format.DateTimeFormatter
+import java.time.format.ResolverStyle
+import java.time.LocalDateTime
+import java.time.LocalDate
 
 
 class GOKbTextUtils {
@@ -96,7 +100,7 @@ class GOKbTextUtils {
 
     // If something has gone cataclysmically wrong (Like, for example, a title consisting of only wide utf-8 characters, or a title like "/." which appears
     // in the askews file, then we fall back on the string we were originally given.
-    if ( normstring == '' )
+    if ( !normstring?.trim() )
       normstring = s
 
     normstring
@@ -199,4 +203,39 @@ class GOKbTextUtils {
     dotProduct(m1, m2) / Math.sqrt(dotProduct(m1, m1) * dotProduct(m2, m2))
   }
 
+  public static LocalDateTime completeDateString(String datepart, boolean start = true) {
+    def result = null
+    DateTimeFormatter dateformatter = DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT)
+    DateTimeFormatter datetimeformatter = DateTimeFormatter.ofPattern("" + "[uuuu-MM-dd' 'HH:mm:ss.SSS]" + "[uuuu-MM-dd' 'HH:mm:ss.S]" + "[uuuu-MM-dd'T'HH:mm:ss'Z']")
+
+    if ( datepart?.trim() ) {
+      try {
+        if ( datepart.length() == 4 ) {
+          if (start) {
+            result = LocalDate.parse(datepart + "-01-01", dateformatter).atStartOfDay()
+          }
+          else {
+            result = LocalDate.parse(datepart + "-12-31", dateformatter).atStartOfDay()
+          }
+        }
+        else if ( datepart.length() == 7 ) {
+          if(start) {
+            result = LocalDate.parse(datepart + "-01", dateformatter).atStartOfDay()
+          }
+          else {
+            result = LocalDate.parse(datepart + "-31", dateformatter).atStartOfDay()
+          }
+        }
+        else if ( datepart.length() == 10 ) {
+          result = LocalDate.parse(datepart, dateformatter).atStartOfDay()
+        }
+        else {
+          result = LocalDateTime.parse(datepart, datetimeformatter)
+        }
+      }
+      catch (Exception pe) {
+      }
+    }
+    result
+  }
 }
