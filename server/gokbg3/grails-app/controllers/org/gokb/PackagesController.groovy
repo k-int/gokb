@@ -13,9 +13,6 @@ import grails.converters.JSON
 import grails.core.GrailsClass
 import groovyx.net.http.URIBuilder
 
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-
 import org.grails.datastore.mapping.model.*
 import org.grails.datastore.mapping.model.types.*
 
@@ -27,15 +24,16 @@ import org.hibernate.Hibernate
 @Transactional(readOnly = true)
 class PackagesController {
 
+  def dateFormatService
   def genericOIDService
   def springSecurityService
   def concurrencyManagerService
   def TSVIngestionService
+  def packageService
   def ESWrapperService
   def ESSearchService
   def sessionFactory
   def messageService
-  def packageService
 
   public static String TIPPS_QRY = 'select tipp from TitleInstancePackagePlatform as tipp, Combo as c where c.fromComponent.id=? and c.toComponent=tipp  and c.type.value = ? order by tipp.id';
 
@@ -53,6 +51,39 @@ class PackagesController {
       log.debug("Tipp qry done ${result.tipps?.size()}");
     }
     result
+  }
+
+  @Secured(['ROLE_USER', 'IS_AUTHENTICATED_FULLY'])
+  def compareContents() {
+    log.debug("compareContents")
+    def result = [params: params, result: 'OK']
+    def user = springSecurityService.currentUser
+
+    if (params.one && params.two) {
+      def date = params.date ? dateFormatService.parseDate(params.date)  : null
+      def full = params.full ? params.boolean('full') : false
+      def listOne = params.list('one')
+      def listTwo = params.list('two')
+
+      if (params.wait) {
+        result = packageService.compareLists(listOne, listTwo, full, date)
+      }
+      else {
+        def background_job = concurrencyManagerService.createJob { Job job ->
+          packageService.compareLists(listOne, listTwo, full, date, job)
+        }.startOrQueue()
+
+        background_job.description = "Package comparison"
+        background_job.type = RefdataCategory.lookup('Job.Type', 'PackageComparison')
+        background_job.ownerId = user.id
+        result.job_id = background_job.uuid
+      }
+    }
+    else {
+      log.debug("Missing info..")
+    }
+
+    render result as JSON
   }
 
   @Secured(['ROLE_USER', 'IS_AUTHENTICATED_FULLY'])
@@ -271,7 +302,7 @@ class PackagesController {
             background_job.type = RefdataCategory.lookupOrCreate('Job.Type', 'DepositDatafile')
             background_job.ownerId = user.id
             background_job.startOrQueue()
-            jobid = background_job.getId()
+            jobid = background_job.uuid
             log.debug("Background job started");
           } else {
             log.error("Missing parameters :: ${params}");
@@ -348,51 +379,94 @@ class PackagesController {
 
   @Transactional(readOnly = true)
   def kbart() {
-    if (request.method == "GET") {
-      if (params.id == "all") {
-        Package.all.each { pack ->
-          packageService.createKbartExport(pack)
-        }
-        return response
-      }
-      def pkg = Package.findByUuid(params.id) ?: genericOIDService.resolveOID(params.id)
-      if (pkg)
-        packageService.sendFile(pkg, PackageService.ExportType.KBART, response)
-      else
-        log.error("Cant find package with ID ${params.id}")
-    } else if (request.method == "POST") {
+    if (request.method == "POST") {
       def packs = []
+      def type = request.JSON.data.exportType=='title'?PackageService.ExportType.KBART_TITLE:PackageService.ExportType.KBART_TIPP
+
       request.JSON.data.ids.each { id ->
-        def pkg = Package.findByUuid(id) ?: genericOIDService.resolveOID(id)
+        def pkg = Package.findByUuid(id) ?: (genericOIDService.oidToId(id) ? Package.get(genericOIDService.oidToId(id)) : null)
+
         if (pkg)
           packs << pkg
       }
-      packageService.sendZip(packs, PackageService.ExportType.KBART, response)
+
+      packageService.sendZip(packs, type, response)
+    }
+    else {
+      def ids = params.list('pkg')
+      def type = params.exportType == 'title' ? PackageService.ExportType.KBART_TITLE : PackageService.ExportType.KBART_TIPP
+
+      if (!ids || ids.size() <= 1) {
+        if (params.id == "all") {
+          Package.all.each { pack ->
+            packageService.createKbartExport(pack, type)
+          }
+          return response
+        }
+
+        def pkg = Package.findByUuid(params.id) ?: (genericOIDService.oidToId(params.id) ? Package.get(genericOIDService.oidToId(params.id)) : null)
+
+        if (pkg)
+          packageService.sendFile(pkg, type, response)
+        else
+          log.error("Cant find package with ID ${params.id}")
+          response.status = 404
+      }
+      else {
+        def packs = []
+
+        ids.each { id ->
+          def pkg = Package.findByUuid(id) ?: (genericOIDService.oidToId(id) ? Package.get(genericOIDService.oidToId(id)) : null)
+          if (pkg)
+            packs << pkg
+        }
+
+        packageService.sendZip(packs, type, response)
+      }
     }
   }
 
   @Transactional(readOnly = true)
   def packageTSVExport() {
-    if (request.method == "GET") {
-      if (params.id == "all") {
-        Package.all.each { pack ->
-          packageService.createTsvExport(pack)
-        }
-        return response
-      }
-      def pkg = Package.findByUuid(params.id) ?: genericOIDService.resolveOID(params.id)
-      if (pkg)
-        packageService.sendFile(pkg, PackageService.ExportType.TSV, response)
-      else
-        log.error("Cant find package with ID ${params.id}")
-    } else if (request.method == "POST") {
+    if (request.method == "POST") {
       def packs = []
+
       request.JSON.data.ids.each { id ->
-        def pkg = Package.findByUuid(id) ?: genericOIDService.resolveOID(id)
+        def pkg = Package.findByUuid(id) ?: (genericOIDService.oidToId(id) ? Package.get(genericOIDService.oidToId(id)) : null)
+
         if (pkg)
           packs << pkg
       }
+
       packageService.sendZip(packs, PackageService.ExportType.TSV, response)
+    }
+    else {
+      def ids = params.list('pkg')
+
+      if (ids?.size() == 0) {
+        if (params.id == "all") {
+          Package.all.each { pack ->
+            packageService.createTsvExport(pack)
+          }
+          return response
+        }
+        def pkg = Package.findByUuid(params.id) ?: (genericOIDService.oidToId(params.id) ? Package.get(genericOIDService.oidToId(params.id)) : null)
+        if (pkg)
+          packageService.sendFile(pkg, PackageService.ExportType.TSV, response)
+        else
+          log.error("Cant find package with ID ${params.id}")
+          response.status = 404
+      } else {
+        def packs = []
+
+        ids.each { id ->
+          def pkg = Package.findByUuid(id) ?: (genericOIDService.oidToId(id) ? Package.get(genericOIDService.oidToId(id)) : null)
+          if (pkg)
+            packs << pkg
+        }
+
+        packageService.sendZip(packs, PackageService.ExportType.TSV, response)
+      }
     }
   }
 }

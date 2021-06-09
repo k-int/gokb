@@ -28,6 +28,7 @@ class ApiController {
   UploadAnalysisService uploadAnalysisService
   def ESWrapperService
   def ESSearchService
+  def zdbAPIService
 
   static def reversemap = ['subject':'subjectKw','componentType':'componentType','identifier':'identifiers.value']
   static def non_analyzed_fields = ['componentType','identifiers.value']
@@ -871,5 +872,39 @@ class ApiController {
     // Return the response.
     apiReturn (resp)
     log.debug "lookup took ${System.currentTimeMillis() - start} milliseconds"
+  }
+
+
+  /**
+   * See the service method {@link com.k_int.ESSearchService#getApiTunnel(def params)} for usage instructions.
+   */
+  def elasticsearchTunnel() {
+    def result = [:]
+    try {
+      result = ESSearchService.getApiTunnel(params)
+    }
+    catch(Exception e){
+      result.result = "ERROR"
+      result.message = e.message
+      result.cause = e.cause
+      log.error("Could not process Elasticsearch API request. Exception was: ${e.message}")
+      response.setStatus(400)
+    }
+    render result as JSON
+  }
+
+  def retrieveZdbCandidates() {
+    def result = [result: 'OK']
+    def title = TitleInstance.get(genericOIDService.oidToId(params.id))
+
+    if (title) {
+      result.candidates = zdbAPIService.lookup(title.name, title.ids)
+    }
+    else {
+      result.result = 'ERROR'
+      result.message = "Title not found!"
+    }
+
+    render result as JSON
   }
 }

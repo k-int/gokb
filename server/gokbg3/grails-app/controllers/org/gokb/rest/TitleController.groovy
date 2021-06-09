@@ -56,6 +56,7 @@ class TitleController {
 
     if (es_search) {
       params.remove('es')
+      params.remove('type')
       def start_es = LocalDateTime.now()
       result = ESSearchService.find(params)
       log.debug("ES duration: ${Duration.between(start_es, LocalDateTime.now()).toMillis();}")
@@ -81,14 +82,17 @@ class TitleController {
     Class type = TitleInstance
 
     if (params.type) {
-      if (params.type == 'journal' || params.type == 'serial' ) {
+      if (params.type.toLowerCase() == 'journal' || params.type.toLowerCase() == 'serial' ) {
         type = JournalInstance
       }
-      else if (params.type == 'book' || params.type == 'monograph') {
+      else if (params.type.toLowerCase() == 'book' || params.type.toLowerCase() == 'monograph') {
         type = BookInstance
       }
-      else if (params.type == 'database') {
+      else if (params.type.toLowerCase() == 'database') {
         type = DatabaseInstance
+      }
+      else if (params.type.toLowerCase() == 'other') {
+        type = OtherInstance
       }
       else {
         type = null
@@ -200,7 +204,7 @@ class TitleController {
 
                 title_lookup.matches.each { tlm ->
                   additionalInfo.otherComponents.add([oid:"${tlm.object.id}", name:"${tlm.object.name}"])
-                  combo_ids.add(tlm.obect.id)
+                  combo_ids.add(tlm.object.id)
                 }
 
                 additionalInfo.cstring = combo_ids.sort().join('_')
@@ -389,7 +393,7 @@ class TitleController {
           if (event.id) {
             def matched_event = current_history.find { it.id == event.id }
 
-            if (event.date && matched_event && event.date != dateFormatService.formatDate(matched_event.eventDate)) {
+            if (event.date && matched_event && event.date != dateFormatService.formatDate(matched_event.date)) {
               def he_obj = ComponentHistoryEvent.get(matched_event.id)
 
               if (he_obj) {
@@ -422,13 +426,131 @@ class TitleController {
                 errors.id << [message: "Unable to lookup event for ID ${event.id}", baddata: event]
               }
             }
+            else if (!matched_event) {
+              log.debug("Matched event is not connected to this title!")
+              if (!errors.id)
+                errors.id = []
+
+              errors.id << [message: "Existing event with ID ${event.id} is not connected to this title!", baddata: event]
+            }
+            else {
+              events.add(matched_event.id)
+            }
           }
           else {
-            if (event.from instanceof List && !event.from.contains(ti.id)) {
+            def lookedUpIds = []
+
+            if (event.from instanceof List) {
               event.from.each { entry ->
-                def cti = TitleInstance.get(entry)
+                def cti = null
+
+                if (entry instanceof Integer) {
+                  if (entry == ti.id) {
+                    cti = ti
+                  }
+                  else {
+                    cti = TitleInstance.get(entry)
+                  }
+                }
+                else if (entry instanceof Map) {
+                  if (entry.id == ti.id) {
+                    cti = ti
+                  }
+                  else {
+                    cti = TitleInstance.get(entry.id)
+                  }
+                }
 
                 if (cti) {
+                  if (!lookedUpIds.contains(cti.id)) {
+                    lookedUpIds.add(cti.id)
+                  }
+                  else {
+                    if (!errors.from)
+                      errors.from = []
+
+                    errors.from << [message: "Multiple instances of title ${cti.id} in event participants!", baddata: entry, code: 404]
+                  }
+
+                  if (cti.id != ti.id) {
+                    def addResult = ensureSingleParticipant(ti, 'from', cti, event.date)
+
+                    if (addResult.errors) {
+                      errors << addResult.errors
+                    }
+                    else {
+                      log.debug("New event ${addResult}")
+                      events.add(addResult.id)
+                    }
+                  }
+                }
+                else {
+                  if (!errors.from)
+                    errors.from = []
+
+                  errors.from << [message: "Unable to lookup title for ${entry}", baddata: entry, code: 404]
+                }
+              }
+            }
+
+            if (event.to instanceof List) {
+              event.to.each { entry ->
+                def cti = null
+
+                if (entry instanceof Integer) {
+                  if (entry == ti.id) {
+                    cti = ti
+                  }
+                  else {
+                    cti = TitleInstance.get(entry)
+                  }
+                }
+                else if (entry instanceof Map) {
+                  if (entry.id == ti.id) {
+                    cti = ti
+                  }
+                  else {
+                    cti = TitleInstance.get(entry.id)
+                  }
+                }
+
+                if (cti) {
+                  if (!lookedUpIds.contains(cti.id)) {
+                    lookedUpIds.add(cti.id)
+                  }
+                  else {
+                    if (!errors.to)
+                      errors.to = []
+
+                    errors.to << [message: "Multiple instances of title ${cti.id} in event participants!", baddata: entry, code: 404]
+                  }
+
+                  if (cti.id != ti.id) {
+                    def addResult = ensureSingleParticipant(ti, 'to', cti, event.date)
+
+                    if (addResult.errors) {
+                      errors << addResult.errors
+                    }
+                    else {
+                      log.debug("New event ${addResult}")
+                      events.add(addResult.id)
+                    }
+                  }
+                }
+                else {
+                  if (!errors.to)
+                    errors.to = []
+
+                  errors.to << [message: "Unable to lookup title for ${entry}", baddata: entry, code: 404]
+                }
+              }
+            }
+
+            if (event.from instanceof Integer && event.from != ti.id) {
+              def cti = TitleInstance.get(event.from)
+
+              if (cti) {
+                if (cti.id != ti.id) {
                   def addResult = ensureSingleParticipant(ti, 'from', cti, event.date)
 
                   if (addResult.errors) {
@@ -438,52 +560,6 @@ class TitleController {
                     log.debug("New event ${addResult}")
                     events.add(addResult.id)
                   }
-                }
-                else {
-                  if (!errors.id)
-                    errors.from = []
-
-                  errors.id << [message: "Unable to lookup title for ID ${from_entry.id}", baddata: entry, code: 404]
-                }
-              }
-            }
-
-            if (event.to instanceof List && !event.to.contains(ti.id)) {
-              event.to.each { entry ->
-                def cti = TitleInstance.get(entry)
-
-                if (cti) {
-                  def addResult = ensureSingleParticipant(ti, 'to', cti, event.date)
-
-                  if (addResult.errors) {
-                    errors << addResult.errors
-                  }
-                  else {
-                    log.debug("New event ${addResult}")
-                    events.add(addResult.id)
-                  }
-                }
-                else {
-                  if (!errors.id)
-                    errors.from = []
-
-                  errors.id << [message: "Unable to lookup title for ID ${from_entry.id}", baddata: entry, code: 404]
-                }
-              }
-            }
-
-            if (event.from instanceof Integer && event.from != ti.id) {
-              def cti = TitleInstance.get(event.from)
-
-              if (cti) {
-                def addResult = ensureSingleParticipant(ti, 'from', cti, event.date)
-
-                if (addResult.errors) {
-                  errors << addResult.errors
-                }
-                else {
-                  log.debug("New event ${addResult}")
-                  events.add(addResult.id)
                 }
               }
               else {
@@ -496,14 +572,16 @@ class TitleController {
               def cti = TitleInstance.get(event.from)
 
               if (cti) {
-                def addResult = ensureSingleParticipant(ti, 'from', cti, event.date)
+                if (cti.id != ti.id) {
+                  def addResult = ensureSingleParticipant(ti, 'from', cti, event.date)
 
-                if (addResult.errors) {
-                  errors << addResult.errors
-                }
-                else {
-                  log.debug("New event ${addResult}")
-                  events.add(addResult.id)
+                  if (addResult.errors) {
+                    errors << addResult.errors
+                  }
+                  else {
+                    log.debug("New event ${addResult}")
+                    events.add(addResult.id)
+                  }
                 }
               }
               else {
@@ -524,7 +602,7 @@ class TitleController {
         }
         else if (remove) {
           current_history.each { ce ->
-            if (!events.contains(ce.id)) {
+            if (!events.find { it == ce.id }) {
               def event = ComponentHistoryEvent.get(ce.id)
               event.delete(flush:true, failOnError:true)
             }
@@ -585,7 +663,12 @@ class TitleController {
     }
     else {
       if (dupe.size() == 1) {
-        result.id = dupe[0].id
+        ComponentHistoryEvent existingEvent = dupe[0]
+        result.id = existingEvent.id
+
+        if (date && (!existingEvent.eventDate || dateFormatService.formatDate(existingEvent.eventDate) != date)) {
+          existingEvent.eventDate = dateFormatService.parseDate(date)
+        }
       }
       else {
         log.error("Got multiple history events between two titles ${dupe}!")
@@ -617,7 +700,7 @@ class TitleController {
 
       if (history) {
         history.each { he ->
-          def mapped_event = [id: he.id, date: dateFormatService.formatDate(he.date), from: [], to: []]
+          def mapped_event = [id: he.id, date: he.date ? dateFormatService.formatDate(he.date) : null, from: [], to: []]
 
           he.from.each { f ->
             if (embeds.contains('history')) {

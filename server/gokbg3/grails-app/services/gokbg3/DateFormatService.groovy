@@ -1,8 +1,10 @@
 package gokbg3
 
 import grails.gorm.transactions.Transactional
+import org.apache.commons.lang3.time.FastDateFormat
 
 import java.text.DateFormat
+import java.text.Format
 import java.text.SimpleDateFormat
 
 /**
@@ -11,10 +13,10 @@ import java.text.SimpleDateFormat
  */
 @Transactional
 class DateFormatService {
-  private static DateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd")
-  private static DateFormat TIMESTAMP_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-  private static DateFormat TIMESTAMP_FORMAT_MS = new SimpleDateFormat("yyyy-MM-dd' 'HH:mm:ss.SSS")
-  private static DateFormat ISO_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+  private static Format DATE_FORMAT = new FastDateFormat("yyyy-MM-dd", TimeZone.getDefault(), Locale.getDefault())
+  private static Format TIMESTAMP_FORMAT = new FastDateFormat("yyyy-MM-dd HH:mm:ss", TimeZone.getDefault(), Locale.getDefault())
+  private static Format TIMESTAMP_FORMAT_MS = new FastDateFormat("yyyy-MM-dd' 'HH:mm:ss.SSS", TimeZone.getDefault(), Locale.getDefault())
+  private static Format ISO_FORMAT = new FastDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", TimeZone.getDefault(), Locale.getDefault())
 
   String formatDate(Date date) {
     DATE_FORMAT.format(date)

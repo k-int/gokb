@@ -1,5 +1,7 @@
 package com.k_int
 
+import groovyx.net.http.HTTPBuilder
+import groovyx.net.http.Method
 import groovyx.net.http.URIBuilder
 
 import org.apache.lucene.search.join.ScoreMode
@@ -14,6 +16,7 @@ import org.elasticsearch.search.sort.*
 
 import org.gokb.cred.*
 
+import java.text.ParseException
 import java.text.SimpleDateFormat
 
 
@@ -85,6 +88,18 @@ class ESSearchService{
       ]
   ]
 
+  static Map indicesPerType = [
+      "JournalInstance" : "gokbtitles",
+      "DatabaseInstance" : "gokbtitles",
+      "OtherInstance" : "gokbtitles",
+      "BookInstance" : "gokbtitles",
+      "TitleInstancePackagePlatform" : "gokbtipps",
+      "Org" : "gokborgs",
+      "Package" : "gokbpackages",
+      "Platform" : "gokbplatforms"
+  ]
+
+
   def search(params){
     search(params,reversemap)
   }
@@ -113,16 +128,14 @@ class ESSearchService{
           params.remove("tempFQ") //remove from GSP access
         }
 
-
-        def es_index = grailsApplication.config.gokb?.es?.index ?: "gokbg3"
-        log.debug("index:${es_index} query: ${query_str}");
+        def es_indices = grailsApplication.config.gokb?.es?.indices?.values()
+        log.debug("start to build srb with indices: ${es_indices.join(", ")} query: ${query_str}");
 
         def search_results = null
 
         try {
-          log.debug("start to build srb with index: " + es_index)
-          SearchRequestBuilder srb = esclient.prepareSearch(es_index)
-          log.debug("srb built: ${srb} sort=${params.sort}");
+          SearchRequestBuilder srb = esclient.prepareSearch(es_indices as String[])
+          log.debug("srb built: ${srb} sort=${params.sort}")
           if (params.sort) {
             SortOrder order = SortOrder.ASC
             if (params.order) {
@@ -143,7 +156,7 @@ class ESSearchService{
           // log.debug("search results: " + search_results)
         }
         catch (Exception ex) {
-          log.error("Error processing ${es_index} ${query_str}",ex);
+          log.error("Error processing ${es_indices.join(", ")} ${query_str}",ex);
         }
 
         //TODO: change this part to represent what we really need if this is not it, see the final part of this method where hits are done
@@ -357,7 +370,7 @@ class ESSearchService{
       }
 
       log.debug("Query ids for ${id_params}")
-      query.must(QueryBuilders.nestedQuery("identifiers", addIdQueries(id_params), ScoreMode.None))
+      query.must(QueryBuilders.nestedQuery("identifiers", addIdQueries(id_params), ScoreMode.Max))
     }
   }
 
@@ -366,21 +379,32 @@ class ESSearchService{
 
       QueryBuilder labelQuery = QueryBuilders.boolQuery()
 
-      labelQuery.should(QueryBuilders.matchQuery('name', qpars.label).boost(3))
-      labelQuery.should(QueryBuilders.matchQuery('altname', qpars.label).boost(1.5))
-      labelQuery.should(QueryBuilders.matchQuery('suggest',qpars.label))
+      if (qpars.int('label')) {
+        def oid = KBComponent.get(qpars.int('label'))?.uuid ?: null
+
+        if (oid) {
+          labelQuery.should(QueryBuilders.termQuery('uuid', oid).boost(10))
+        }
+      }
+      else {
+        labelQuery.should(QueryBuilders.termQuery('uuid', qpars.q).boost(10))
+      }
+
+      labelQuery.should(QueryBuilders.matchQuery('name', qpars.label).boost(2))
+      labelQuery.should(QueryBuilders.matchQuery('altname', qpars.label).boost(1.3))
+      labelQuery.should(QueryBuilders.matchQuery('suggest', qpars.label).boost(0.6))
       labelQuery.minimumNumberShouldMatch(1)
 
       query.must(labelQuery)
     }
     else if (qpars.name) {
-      query.must(QueryBuilders.matchQuery('name',qpars.name))
+      query.must(QueryBuilders.matchQuery('name', qpars.name))
     }
     else if (qpars.altname) {
-      query.must(QueryBuilders.matchQuery('altname',qpars.altname))
+      query.must(QueryBuilders.matchQuery('altname', qpars.altname))
     }
     else if (qpars.suggest) {
-      query.must(QueryBuilders.matchQuery('suggest',qpars.suggest))
+      query.must(QueryBuilders.matchQuery('suggest', qpars.suggest).boost(0.6))
     }
   }
 
@@ -389,10 +413,21 @@ class ESSearchService{
       QueryBuilder genericQuery = QueryBuilders.boolQuery()
       def id_params = ['identifiers.value': qpars.q]
 
-      genericQuery.should(QueryBuilders.matchQuery('name',qpars.q).boost(3))
-      genericQuery.should(QueryBuilders.matchQuery('altname',qpars.q).boost(1.5))
-      genericQuery.should(QueryBuilders.matchQuery('suggest',qpars.q))
-      genericQuery.should(QueryBuilders.nestedQuery('identifiers', addIdQueries(id_params), ScoreMode.None).boost(10))
+      if (qpars.int('q')) {
+        def oid = KBComponent.get(qpars.int('q'))?.uuid ?: null
+
+        if (oid) {
+          genericQuery.should(QueryBuilders.termQuery('uuid', oid).boost(10))
+        }
+      }
+      else {
+        genericQuery.should(QueryBuilders.termQuery('uuid', qpars.q).boost(10))
+      }
+
+      genericQuery.should(QueryBuilders.matchQuery('name', qpars.q).boost(2))
+      genericQuery.should(QueryBuilders.matchQuery('altname', qpars.q).boost(1.3))
+      genericQuery.should(QueryBuilders.matchQuery('suggest', qpars.q).boost(0.6))
+      genericQuery.should(QueryBuilders.nestedQuery('identifiers', addIdQueries(id_params), ScoreMode.Max).boost(10))
       genericQuery.minimumNumberShouldMatch(1)
 
       query.must(genericQuery)
@@ -443,9 +478,15 @@ class ESSearchService{
    *         then the end of scrolling is reached.
    **/
   def scroll(params) throws Exception{
-
+    def result = [:]
+    def usedComponentTypes = getUsedComponentTypes(params, result)
+    if (result.error){
+      return result
+    }
+    // now search
     int scrollSize = 5000
-    def result = ["result" : "OK", "scrollSize" : scrollSize]
+    result.result = "OK"
+    result.scrollSize = scrollSize
     def esClient = ESWrapperService.getClient()
     def errors = [:]                              // TODO: use errors
 
@@ -464,7 +505,7 @@ class ESSearchService{
       SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
       searchSourceBuilder.query(scrollQuery)
       searchSourceBuilder.size(scrollSize)
-      SearchRequest searchRequest = new SearchRequest(grailsApplication.config.gokb.es.index)
+      SearchRequest searchRequest = new SearchRequest(usedComponentTypes.values() as String[])
       searchRequest.scroll("1m")
       // ... set scroll interval to 1 minute
       searchRequest.source(searchSourceBuilder)
@@ -473,7 +514,7 @@ class ESSearchService{
     }
     else{
       SearchScrollRequest scrollRequest = new SearchScrollRequest(params.scrollId)
-      scrollRequest.scroll("1m")
+      scrollRequest.scroll("5m")
       response = esClient.searchScroll(scrollRequest)
       try{
         if (params.lastPage && Integer.valueOf(params.lastPage) > -1){
@@ -487,12 +528,38 @@ class ESSearchService{
     result.scrollId = response.actionGet().getScrollId()
     SearchHit[] searchHits = response.actionGet().getHits().getHits()
     result.hasMoreRecords = searchHits.length == scrollSize
-
     result.records = filterLastUpdatedDisplay(searchHits, params, errors, result)
     // TODO: remove this after upgrade to Elasticsearch 7
 
     result.size = result.records.size()
     result
+  }
+
+  private Map getUsedComponentTypes(params, LinkedHashMap<Object, Object> result){
+    Map usedComponentTypes = new HashMap()
+    if (!params.component_type){
+      result.result = "ERROR"
+      result.message = "Error. Needs 'component_type' specification."
+    }
+
+    if (params.component_type instanceof String){
+      usedComponentTypes."${params.component_type}" = null
+    }
+    else if (params.component_type instanceof List){
+      for (def componentType in params.component_type){
+        usedComponentTypes."${componentType}" = null
+      }
+    }
+    for (def ct in usedComponentTypes.keySet()){
+      if (ct in indicesPerType.keySet()){
+        usedComponentTypes."${ct}" = indicesPerType.get(ct)
+      }
+      else{
+        result.result = "ERROR"
+        result.message = "Error. Wrong 'component_type' specification: ${ct}"
+      }
+    }
+    return usedComponentTypes
   }
 
 
@@ -505,12 +572,21 @@ class ESSearchService{
     List filteredHits = []
     SimpleDateFormat YYYY_MM_DD = new SimpleDateFormat("yyyy-MM-dd")
     SimpleDateFormat YYYY_MM_DD_HH_mm_SS = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-    Date changedSince = parseDate(params.changedSince, YYYY_MM_DD_HH_mm_SS, YYYY_MM_DD)
+    SimpleDateFormat ISO = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+    Date changedSince = parseDate(params.changedSince, YYYY_MM_DD_HH_mm_SS, YYYY_MM_DD, ISO)
     for (SearchHit hit in searchHitsArray){
       String dateString = hit.getSourceAsMap().get("lastUpdatedDisplay")
-      if (changedSince == null ||
-          dateString && !YYYY_MM_DD_HH_mm_SS.parse(dateString)?.before(changedSince)){
-        filteredHits.add(hit.getSourceAsMap())
+      Date date
+      if(dateString) {
+        try {
+          date = ISO.parse(dateString)
+        }
+        catch (ParseException ignored) {
+          date = YYYY_MM_DD_HH_mm_SS.parse(dateString)
+        }
+        if (changedSince == null || date && !date.before(changedSince)){
+          filteredHits.add(hit.getSourceAsMap())
+        }
       }
     }
     return filteredHits
@@ -566,7 +642,7 @@ class ESSearchService{
         Client esclient = ESWrapperService.getClient()
         SearchRequestBuilder es_request =  esclient.prepareSearch("exact")
 
-        es_request.setIndices(grailsApplication.config.gokb.es.index)
+        es_request.setIndices(grailsApplication.config.gokb.es.indices.values() as String[])
         es_request.setTypes(grailsApplication.config.globalSearch.types)
         es_request.setQuery(exactQuery)
 
@@ -693,7 +769,13 @@ class ESSearchService{
     def platformParam = null
     params.each{ k, v ->
       if (requestMapping.generic && k in requestMapping.generic){
-        exactQuery.must(QueryBuilders.matchQuery(k, v))
+        def final_val = v
+
+        if (k == 'id' && params.int('id')) {
+          final_val = KBComponent.get(params.int('id'))?.getLogEntityId()
+        }
+
+        exactQuery.must(QueryBuilders.matchQuery(k, final_val))
       }
       else if (requestMapping.simpleMap?.containsKey(k)){
         exactQuery.must(QueryBuilders.matchQuery(requestMapping.simpleMap[k], v))
@@ -733,6 +815,7 @@ class ESSearchService{
         typeQuery.should(QueryBuilders.termQuery('componentType', "JournalInstance"))
         typeQuery.should(QueryBuilders.termQuery('componentType', "DatabaseInstance"))
         typeQuery.should(QueryBuilders.termQuery('componentType', "BookInstance"))
+        typeQuery.should(QueryBuilders.termQuery('componentType', "OtherInstance"))
         typeQuery.minimumNumberShouldMatch(1)
         exactQuery.must(typeQuery)
       }
@@ -872,7 +955,7 @@ class ESSearchService{
   }
 
   /**
-   *  convertEsLinks : Converts es response layout to conform with REST mapping.
+   *  convertEsLinks : Converts Elasticsearch response layout to conform with REST mapping.
    * @param es_result : The result object
    * @param params : Request parameters
    * @param component_endpoint : Possible URL path override
@@ -1000,13 +1083,15 @@ class ESSearchService{
         "TitleInstancePackagePlatform",
         "TIPP",
         "TitleInstance",
-        "Title"
+        "Title",
+        "OtherInstance",
+        "Other"
     ]
     def final_type = typeString.capitalize()
 
-    if(final_type in defined_types) {
+    if (final_type in defined_types) {
 
-      if(final_type== 'TIPP') {
+      if (final_type== 'TIPP') {
         final_type = 'TitleInstancePackagePlatform'
       }
       else if (final_type == 'Book') {
@@ -1020,6 +1105,9 @@ class ESSearchService{
       }
       else if (final_type == 'Title') {
         final_type = 'TitleInstance'
+      }
+      else if (final_type == 'Other') {
+        final_type = 'OtherInstance'
       }
 
       result = final_type
@@ -1041,6 +1129,43 @@ class ESSearchService{
   @javax.annotation.PreDestroy
   def destroy() {
     log.debug("Destroy");
+  }
+
+
+  /**
+   * Tunnels the full query string to Elasticsearch and returns the full Elasticsearch result. Only GET operations
+   * are possible. The purpose of this endpoint is not to need to open the Elasticsearch port (usually 9200) for the
+   * outside world, in order to prevent non-GET operations.
+   * @param params The params necessary for this operation.
+   * @param params.q The query string for Elasticsearch
+   * @param params.size Optional parameter: The maximum size of the result.
+   * @return The exact Json response of the Elasticsearch GET operation.
+   * @throws Exception Any exception occuring.
+   */
+  def getApiTunnel(def params) throws Exception{
+    if (!params || !params.q){
+      return null
+    }
+    int port = grailsApplication.config.searchApi.port
+    def indices = grailsApplication?.config?.gokb?.es?.indices?.values()
+    String host = grailsApplication?.config?.gokb?.es?.host
+    String url = "http://${host}:${port}/${indices.join(',')}/_search?q=${params.q}"
+    if (params.size){
+      url = url + "&size=${params.size}"
+    }
+    HTTPBuilder httpBuilder = new HTTPBuilder(url)
+    httpBuilder.request(Method.GET){ req ->
+      response.success = { resp, html ->
+        return html
+      }
+      response.failure = { resp ->
+        return [
+            'error': "Could not process Elasticsearch request.",
+            'status': resp.statusLine,
+            'message': resp.message
+        ]
+      }
+    }
   }
 
 }
