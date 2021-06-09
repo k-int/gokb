@@ -29,8 +29,6 @@ apply plugin:"com.energizedwork.idea-project-components"
 apply plugin:"asset-pipeline"
 apply plugin:"org.grails.grails-gsp"
 apply plugin:"org.grails.grails-doc"
-// Fixing too long classpath in Windows development environment
-apply plugin: "ua.eshepelyuk.ManifestClasspath"
 
 repositories {
     mavenLocal()
